@@ -25,12 +25,14 @@ def test_canva_status_reports_oauth_and_design_export_implementation():
     assert payload["oauth_implemented"] is True
     assert payload["design_listing_implemented"] is True
     assert payload["export_implemented"] is True
+    assert payload["token_refresh_implemented"] is True
 
 
 def test_health_reports_canva_oauth_implementation():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["canva_oauth_implemented"] is True
+    assert response.json()["canva_token_refresh_implemented"] is True
 
 
 def test_canva_design_routes_require_nova_key(monkeypatch):
