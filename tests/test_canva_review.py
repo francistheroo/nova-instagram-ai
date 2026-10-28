@@ -115,3 +115,80 @@ def test_canva_draft_export_rejects_invalid_job_id(monkeypatch):
         headers={"X-NOVA-API-Key": "test-secret"},
     )
     assert response.status_code == 422
+
+
+
+def test_canva_mp4_export_creates_reel_container_without_publishing(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import canva_review, main
+
+    async def fake_canva_request(method, path, *, params=None, json_body=None):
+        assert method == "GET"
+        assert path == "exports/job_mp4"
+        return {
+            "job": {
+                "id": "job_mp4",
+                "status": "success",
+                "urls": ["https://export-download.canva.com/temp.mp4"],
+            }
+        }
+
+    calls = []
+
+    async def fake_meta_request(method, path, *, params=None, data=None):
+        calls.append((method, path, params, data))
+        return {"id": "reel_container_123"}
+
+    monkeypatch.setattr(canva_review, "_canva_request", fake_canva_request)
+    monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v25.0"))
+    monkeypatch.setattr(main, "meta_request", fake_meta_request)
+    response = client.post(
+        "/canva/instagram-reel-drafts/job_mp4",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "My Reel", "share_to_feed": True},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["container_id"] == "reel_container_123"
+    assert payload["published"] is False
+    assert payload["review_required"] is True
+    assert calls[0][0:2] == ("POST", "user_123/media")
+    assert calls[0][3]["media_type"] == "REELS"
+    assert calls[0][3]["video_url"] == "https://export-download.canva.com/temp.mp4"
+    assert len(calls) == 1
+
+
+def test_canva_export_must_be_successful_before_reel_draft(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import canva_review
+
+    async def fake_canva_request(method, path, *, params=None, json_body=None):
+        return {"job": {"id": "job_pending", "status": "in_progress"}}
+
+    monkeypatch.setattr(canva_review, "_canva_request", fake_canva_request)
+    response = client.post(
+        "/canva/instagram-reel-drafts/job_pending",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "My Reel"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["status"] == "in_progress"
+
+
+def test_canva_export_to_reel_respects_disabled_actions(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "false")
+    from app import canva_review
+
+    async def fail_if_called(method, path, *, params=None, json_body=None):
+        raise AssertionError("Canva export must not be fetched while actions are disabled")
+
+    monkeypatch.setattr(canva_review, "_canva_request", fail_if_called)
+    response = client.post(
+        "/canva/instagram-reel-drafts/job_mp4",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "My Reel"},
+    )
+    assert response.status_code == 403
