@@ -1,5 +1,6 @@
 import os
 from typing import Optional, Any
+from datetime import datetime, timezone
 
 import httpx
 from dotenv import load_dotenv
@@ -68,7 +69,7 @@ def instagram_config():
         stored = None
     if stored:
         expiry = stored.get("expires_at")
-        if expiry is not None and expiry <= __import__("datetime").datetime.now(__import__("datetime").timezone.utc):
+        if expiry is not None and expiry <= datetime.now(timezone.utc):
             raise HTTPException(status_code=503, detail="Instagram access token has expired. Reconnect Instagram; automatic refresh is not implemented yet.")
         token = stored["access_token"]
         user_id = user_id or stored["instagram_user_id"]
@@ -120,7 +121,7 @@ async def health():
         "status": "ok",
         "service": "NOVA Instagram AI",
         "instagram_configured": bool(os.getenv("INSTAGRAM_ACCESS_TOKEN") and os.getenv("INSTAGRAM_USER_ID")),
-        "instagram_oauth_implemented": False,
+        "instagram_oauth_implemented": True,
         "instagram_token_refresh_implemented": False,
         "instagram_webhooks_implemented": False,
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
