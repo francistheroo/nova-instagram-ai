@@ -12,7 +12,11 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 - `POST /instagram/messages/reply`: attempts a supported message reply for an eligible Instagram-scoped recipient ID.
 - `POST /instagram/publish-image`: creates and publishes an image container from a publicly reachable image URL.
 - `POST /ai/generate-image`: calls a separately configured OpenAI-compatible image-generation API.
-- `GET /canva/status`: reports Canva OAuth/design/export implementation status without exposing credentials.
+- `GET /canva/status`: reports Canva integration implementation status without exposing credentials.
+- `GET /canva/designs`: lists the connected user's Canva designs (protected by `X-NOVA-API-Key`).
+- `GET /canva/designs/{design_id}/export-formats`: lists supported export formats for a design.
+- `POST /canva/exports`: starts a Canva export job for a supported format.
+- `GET /canva/exports/{job_id}`: checks an asynchronous export job status.
 
 ## Security and setup
 
@@ -46,7 +50,7 @@ To connect: configure the Instagram Login product in the Meta developer dashboar
 - Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
 - Reels audio/music publishing requires a separately verified, supported Meta audio workflow and suitable licensing. This starter does not attach music to Reels.
 - Message sending is subject to Meta messaging permissions, eligible conversations, and messaging windows. Do not use it for unsolicited bulk messages.
-- Canva OAuth uses Authorization Code + PKCE and encrypted PostgreSQL token storage in code, but requires a configured Canva developer app and live verification. Design listing/export routes are still not implemented. Canva Connect API access is subject to Canva's app requirements and review.
+- Canva OAuth uses Authorization Code + PKCE and encrypted PostgreSQL token storage in code, but requires a configured Canva developer app and live verification. Design listing, export-format lookup, and asynchronous export job routes are implemented in code. A configured Canva developer app and live verification are still required. Canva Connect API access is subject to Canva's app requirements and review.
 - Render free instances may sleep, and local disk may not persist. Use persistent storage and a queue/scheduler for reliable automation.
 
 Never commit API keys, access tokens, or secrets.
@@ -54,4 +58,4 @@ Never commit API keys, access tokens, or secrets.
 
 ## Canva OAuth setup
 
-Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`, `DATABASE_URL`, `OAUTH_STATE_SECRET`, and `TOKEN_ENCRYPTION_KEY` in Render. Register the exact HTTPS redirect URI `https://nova-instagram-ai.onrender.com/oauth/canva/callback` in your Canva developer app (or use the exact URI for your own deployment). Run `python -m app.init_oauth_db` to initialize both OAuth state and encrypted token tables, then visit `/oauth/canva/start`. The callback stores tokens server-side and does not return them to the browser. OAuth code is implemented but has not yet been verified with a live Canva app. Canva design listing and export are follow-up work.
+Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`, `DATABASE_URL`, `OAUTH_STATE_SECRET`, and `TOKEN_ENCRYPTION_KEY` in Render. Register the exact HTTPS redirect URI `https://nova-instagram-ai.onrender.com/oauth/canva/callback` in your Canva developer app (or use the exact URI for your own deployment). Run `python -m app.init_oauth_db` to initialize both OAuth state and encrypted token tables, then visit `/oauth/canva/start`. The callback stores tokens server-side and does not return them to the browser. OAuth code is implemented but has not yet been verified with a live Canva app. Canva design listing and asynchronous export routes are now included, but have not been verified against a live Canva app. Export download URLs are temporary and should not be treated as permanent storage.
