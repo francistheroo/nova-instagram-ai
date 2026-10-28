@@ -64,3 +64,22 @@ def test_canva_status_reports_design_and_export_routes():
     payload = response.json()
     assert payload["design_listing_implemented"] is True
     assert payload["export_implemented"] is True
+
+
+
+def test_canva_refresh_requires_nova_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    response = client.post("/oauth/canva/refresh")
+    assert response.status_code == 401
+
+
+def test_canva_refresh_requires_configured_client_and_stored_refresh_token(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("CANVA_CLIENT_ID", "test-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://example.com/oauth/canva/callback")
+    from app import canva_oauth
+    monkeypatch.setattr(canva_oauth, "load_latest_canva_tokens", lambda: {"access_token": "old-access", "refresh_token": ""})
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "test-secret"})
+    assert response.status_code == 503
+    assert "refresh token" in response.json()["detail"].lower()
