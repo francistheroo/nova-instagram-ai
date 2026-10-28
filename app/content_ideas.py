@@ -53,8 +53,8 @@ async def generate_content_ideas(body: ContentIdeasRequest):
                 json={
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": NOVA_SYSTEM_PROMPT + "\\nFor this task, follow the requested JSON output format exactly."},
-                        {"role": "user", "content": "\\n".join(brief)},
+                        {"role": "system", "content": NOVA_SYSTEM_PROMPT + "\nFor this task, follow the requested JSON output format exactly."},
+                        {"role": "user", "content": "\n".join(brief)},
                     ],
                     "temperature": 0.9,
                 },

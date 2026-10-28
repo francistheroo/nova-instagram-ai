@@ -52,7 +52,7 @@ async def generate_caption(body: CaptionDraftRequest):
                     "model": model,
                     "messages": [
                         {"role": "system", "content": NOVA_SYSTEM_PROMPT},
-                        {"role": "user", "content": "\\n".join(requirements)},
+                        {"role": "user", "content": "\n".join(requirements)},
                     ],
                     "temperature": 0.85,
                 },
