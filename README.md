@@ -59,3 +59,10 @@ Never commit API keys, access tokens, or secrets.
 ## Canva OAuth setup
 
 Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`, `DATABASE_URL`, `OAUTH_STATE_SECRET`, and `TOKEN_ENCRYPTION_KEY` in Render. Register the exact HTTPS redirect URI `https://nova-instagram-ai.onrender.com/oauth/canva/callback` in your Canva developer app (or use the exact URI for your own deployment). Run `python -m app.init_oauth_db` to initialize both OAuth state and encrypted token tables, then visit `/oauth/canva/start`. The callback stores tokens server-side and does not return them to the browser. After connecting, the protected `POST /oauth/canva/refresh` endpoint can manually refresh tokens using `X-NOVA-API-Key`; do not call it concurrently because each refresh token can be used only once. OAuth and design/export routes have not yet been verified against a live Canva app. Export download URLs are temporary and should not be treated as permanent storage.
+
+
+## Canva export to Instagram: manual review gate
+
+The protected `POST /canva/instagram-draft-exports` endpoint starts a Canva PNG export for an Instagram post or an MP4 export (vertical 1080p target) for a Reel. It returns the export job and caption but **does not publish**. Poll `GET /canva/instagram-draft-exports/{job_id}` until the job succeeds; the response then includes temporary preview URLs. Review the actual media and caption yourself before using the existing Instagram publishing endpoint. The Canva URLs expire after 24 hours and should not be stored as permanent assets.
+
+Both routes require `X-NOVA-API-Key` and a connected Canva account. Reel export quality is only a target resolution; Canva preserves the design's aspect ratio, so check the actual dimensions before publishing. Instagram publishing remains a separate explicit action and still requires valid Meta permissions and `INSTAGRAM_AUTOMATION_ENABLED=true`.
