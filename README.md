@@ -124,13 +124,18 @@ All three endpoints require `X-NOVA-API-Key`. Configure `DATABASE_URL` and run `
 The protected 12-hour memory store now has a webhook receiver:
 - `GET /webhooks/instagram` handles Meta's subscription challenge.
 - `POST /webhooks/instagram` validates `X-Hub-Signature-256` with `META_APP_SECRET` and stores supported incoming text messages as user turns.
-- Echo messages and non-text attachments are ignored. The receiver does not generate or send replies.
+- Echo messages and non-text attachments are ignored. If `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=true`, it can generate and send a context-aware reply to an eligible incoming text DM using Meta's official messaging endpoint. Replies are skipped unless the incoming event timestamp is within the standard 24-hour messaging window; the 12-hour memory duration does not extend that window.
 
 Set `META_APP_SECRET` and a long random `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` in the server environment, configure the HTTPS webhook URL in Meta, and subscribe to the required Instagram messaging events only after the app/account has the required access. Keep `DATABASE_URL` configured and run `python -m app.init_oauth_db`.
 
-This code and automated tests do not establish live Meta webhook delivery or permission approval. After live delivery is verified, the next integration step is to load the stored context into NOVA's reply-generation prompt; automatic replying remains intentionally off.
+Automatic replies are disabled by default. Before enabling them, verify Meta app review/permissions, the webhook subscription, the Instagram messaging scope, token validity, and a test conversation. This code and automated tests do not prove live Meta delivery or permission approval. The webhook never initiates cold DMs and does not use the Human Agent exception.
 
 
 ### Memory-aware DM reply drafts
 
 `POST /instagram/dm-memory/preview-reply` is a protected, draft-only endpoint. Send `recipient_id`, the latest `message`, and optional `language_hint` with `X-NOVA-API-Key`. It loads the last 12 hours of stored messages (up to 30) and uses the configured AI text provider to produce a reply preview. The response explicitly reports `sent_to_instagram: false`; it does not send or save the generated draft as a conversation turn. Real incoming text is added to memory only by the verified webhook, so webhook delivery and permissions must be configured for full behavior.
+
+
+### Actual automatic DM replies
+
+Set `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=true` only after a test conversation confirms the official messaging API works and the account has the required approved messaging permission. Keep it `false` otherwise. The webhook uses the recent 12-hour memory to generate replies and stores the assistant response only after Meta accepts the send. It skips replies when the event timestamp is missing/outside the standard 24-hour window, AI configuration is missing, or credentials are unavailable. Failed sends are not retried automatically by NOVA to reduce duplicate replies. The `/instagram/dm-memory/preview-reply` endpoint remains available for manual review, but the webhook path can send actual replies when explicitly enabled.
