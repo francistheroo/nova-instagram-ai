@@ -255,6 +255,57 @@ def clear_dm_memory(recipient_id: str):
     return {"cleared": True, "deleted_messages": result.rowcount}
 
 
+
+DM_EVENT_LEASE = timedelta(minutes=2)
+
+
+def claim_dm_event(message_id: str) -> bool:
+    """Atomically claim a webhook message for reply processing.
+
+    A fresh event can be claimed once. Retryable events and abandoned processing
+    leases can be reclaimed; already-sent events cannot.
+    """
+    if not message_id or len(message_id) > 512:
+        raise ValueError("invalid Meta message ID")
+    now = datetime.now(timezone.utc)
+    lease_until = now + DM_EVENT_LEASE
+    with _connect() as conn:
+        result = conn.execute(
+            """
+            INSERT INTO nova_instagram_dm_events
+                (message_id, status, lease_until, updated_at)
+            VALUES (%s, 'processing', %s, %s)
+            ON CONFLICT (message_id) DO UPDATE
+                SET status = 'processing', lease_until = EXCLUDED.lease_until,
+                    updated_at = EXCLUDED.updated_at
+                WHERE nova_instagram_dm_events.status = 'retryable'
+                   OR (nova_instagram_dm_events.status = 'processing'
+                       AND nova_instagram_dm_events.lease_until <= %s)
+            RETURNING message_id
+            """,
+            (message_id, lease_until, now, now),
+        )
+        return result.fetchone() is not None
+
+
+def finish_dm_event(message_id: str, status: Literal["sent", "retryable"]) -> None:
+    """Record a reply outcome; retryable failures may be claimed again."""
+    if status not in ("sent", "retryable"):
+        raise ValueError("status must be sent or retryable")
+    now = datetime.now(timezone.utc)
+    with _connect() as conn:
+        result = conn.execute(
+            """
+            UPDATE nova_instagram_dm_events
+               SET status = %s, lease_until = NULL, updated_at = %s
+             WHERE message_id = %s AND status = 'processing'
+            RETURNING message_id
+            """,
+            (status, now, message_id),
+        )
+        if result.fetchone() is None:
+            raise RuntimeError("DM event was not in processing state")
+
 def initialize_schema() -> None:
     """Create the memory table and expiry index as part of deployment migration."""
     with _connect() as conn:
@@ -272,6 +323,16 @@ def initialize_schema() -> None:
             """
         )
         conn.execute("ALTER TABLE nova_instagram_dm_memory ADD COLUMN IF NOT EXISTS message_id TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS nova_instagram_dm_events (
+                message_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'retryable')),
+                lease_until TIMESTAMPTZ,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """
+        )
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS nova_instagram_dm_memory_message_id_idx ON nova_instagram_dm_memory (message_id) WHERE message_id IS NOT NULL")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS nova_instagram_dm_memory_expiry_idx ON nova_instagram_dm_memory (expires_at)"
