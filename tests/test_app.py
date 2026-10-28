@@ -72,3 +72,30 @@ def test_write_action_stays_disabled_by_default(monkeypatch):
     )
     assert response.status_code == 403
     assert "disabled" in response.json()["detail"]
+
+
+
+def test_verify_route_requires_api_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    response = client.get("/instagram/verify")
+    assert response.status_code == 401
+
+
+def test_verify_route_returns_profile_from_meta(monkeypatch):
+    import asyncio
+    import app.main as main_module
+
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "123456")
+
+    async def fake_meta_request(method, path, *, params=None, data=None):
+        assert method == "GET"
+        assert path == "123456"
+        assert params == {"fields": "id,username"}
+        return {"id": "123456", "username": "nova_test"}
+
+    monkeypatch.setattr(main_module, "meta_request", fake_meta_request)
+    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"})
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "profile_id": "123456", "username": "nova_test"}
