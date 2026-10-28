@@ -25,6 +25,17 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 7. Use a publicly reachable image URL for Instagram publishing. The image-generation endpoint's returned URL may be temporary; reliable publishing usually needs persistent object storage and a public URL.
 8. Deploy and check `/health`, then test read-only `/instagram/media` before enabling any write action.
 
+## OAuth security foundation
+
+The `app/oauth_security.py` module provides signed, time-limited state values and Fernet token-encryption helpers. The proposed `app/oauth_store.py` module adds PostgreSQL helpers for storing encrypted tokens and atomically consuming OAuth state nonces. These helpers are foundations, not a complete OAuth flow: no OAuth routes call them yet, and the app does not yet perform authorization-code exchange or token refresh.
+
+For a deployment using the PostgreSQL store, configure:
+- `DATABASE_URL`: private PostgreSQL connection string from the database provider.
+- `OAUTH_STATE_SECRET`: a randomly generated secret of at least 32 characters.
+- `TOKEN_ENCRYPTION_KEY`: a Fernet key generated with Python's `cryptography` package (keep it outside the database and repository).
+
+Run `initialize_schema()` as an explicit deployment/migration step before using the storage helpers. Do not expose decrypted tokens to browser clients or logs. OAuth state must be bound to the initiating browser session in addition to signature/age checks; store and consume its nonce exactly once. Do not enable write actions until the full flow and token renewal are implemented and tested.
+
 ## Important limitations
 
 - This is not a complete OAuth application: token acquisition, refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
