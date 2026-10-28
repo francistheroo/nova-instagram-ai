@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
 from app.instagram_oauth import router as instagram_oauth_router
+from app.ai_caption import router as ai_caption_router
 from app.canva_oauth import router as canva_oauth_router
 from app.canva_api import router as canva_api_router
 from app.canva_review import router as canva_review_router
@@ -20,6 +21,7 @@ from app.oauth_store import load_instagram_token, load_latest_instagram_token, O
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
 app.include_router(instagram_oauth_router)
+app.include_router(ai_caption_router)
 app.include_router(canva_oauth_router)
 app.include_router(canva_api_router)
 app.include_router(canva_review_router)
