@@ -65,3 +65,18 @@ def test_oauth_callback_rejects_missing_code_or_state(monkeypatch):
     configure_oauth(monkeypatch)
     response = client.get("/oauth/instagram/callback")
     assert response.status_code == 400
+
+
+def test_manual_refresh_requires_api_key(monkeypatch):
+    monkeypatch.delenv("NOVA_API_KEY", raising=False)
+    response = client.post("/oauth/instagram/refresh")
+    assert response.status_code == 503
+
+
+def test_manual_refresh_rejects_invalid_api_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "expected-secret")
+    response = client.post(
+        "/oauth/instagram/refresh",
+        headers={"X-NOVA-API-Key": "wrong-secret"},
+    )
+    assert response.status_code == 401
