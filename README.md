@@ -124,7 +124,7 @@ All three endpoints require `X-NOVA-API-Key`. Configure `DATABASE_URL` and run `
 The protected 12-hour memory store now has a webhook receiver:
 - `GET /webhooks/instagram` handles Meta's subscription challenge.
 - `POST /webhooks/instagram` validates `X-Hub-Signature-256` with `META_APP_SECRET` and stores supported incoming text messages as user turns.
-- Echo messages and non-text attachments are ignored. If `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=true`, it can generate and send a context-aware reply to an eligible incoming text DM using Meta's official messaging endpoint. Replies are skipped unless the incoming event timestamp is within the standard 24-hour messaging window; the 12-hour memory duration does not extend that window.
+- Echo messages and non-text attachments are ignored. Incoming Meta message IDs (`message.mid`) are stored under a partial unique index so repeated webhook deliveries are skipped before AI generation or sending; run `python -m app.init_oauth_db` to apply the schema update. Events without a message ID can still be ingested but cannot receive ID-based deduplication. If `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=true`, it can generate and send a context-aware reply to an eligible incoming text DM using Meta's official messaging endpoint. Replies are skipped unless the incoming event timestamp is within the standard 24-hour messaging window; the 12-hour memory duration does not extend that window.
 
 Set `META_APP_SECRET` and a long random `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` in the server environment, configure the HTTPS webhook URL in Meta, and subscribe to the required Instagram messaging events only after the app/account has the required access. Keep `DATABASE_URL` configured and run `python -m app.init_oauth_db`.
 
