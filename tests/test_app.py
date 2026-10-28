@@ -82,7 +82,6 @@ def test_verify_route_requires_api_key(monkeypatch):
 
 
 def test_verify_route_returns_profile_from_meta(monkeypatch):
-    import asyncio
     import app.main as main_module
 
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
