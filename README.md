@@ -117,3 +117,15 @@ NOVA includes a protected PostgreSQL store for short-lived DM context. Each stor
 All three endpoints require `X-NOVA-API-Key`. Configure `DATABASE_URL` and run `python -m app.init_oauth_db` to create the memory table. Do not put the API key in browser code or logs.
 
 **Important:** this adds the 12-hour storage/retrieval layer only. Automatic ingestion from real Instagram DMs and using this context when NOVA generates/sends replies still require an approved Meta messaging webhook/event flow and integration work. The current implementation does not fetch DMs by itself or send messages. Expiry is enforced when records are accessed or written; a database scheduler can be added later for physical deletion at the exact expiry time.
+
+
+### Incoming Instagram DM webhook
+
+The protected 12-hour memory store now has a webhook receiver:
+- `GET /webhooks/instagram` handles Meta's subscription challenge.
+- `POST /webhooks/instagram` validates `X-Hub-Signature-256` with `META_APP_SECRET` and stores supported incoming text messages as user turns.
+- Echo messages and non-text attachments are ignored. The receiver does not generate or send replies.
+
+Set `META_APP_SECRET` and a long random `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` in the server environment, configure the HTTPS webhook URL in Meta, and subscribe to the required Instagram messaging events only after the app/account has the required access. Keep `DATABASE_URL` configured and run `python -m app.init_oauth_db`.
+
+This code and automated tests do not establish live Meta webhook delivery or permission approval. After live delivery is verified, the next integration step is to load the stored context into NOVA's reply-generation prompt; automatic replying remains intentionally off.

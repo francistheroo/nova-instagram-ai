@@ -35,6 +35,26 @@ def _require_nova_key(x_nova_api_key: str | None = Header(default=None, alias="X
         raise HTTPException(status_code=401, detail="A valid X-NOVA-API-Key is required.")
 
 
+def store_dm_message(recipient_id: str, role: str, message: str) -> datetime:
+    """Internal helper for trusted webhook ingestion; returns the expiry time."""
+    if role not in ("user", "assistant"):
+        raise ValueError("role must be user or assistant")
+    if not recipient_id or len(recipient_id) > 128 or not all(ch.isalnum() or ch in "_.:-" for ch in recipient_id):
+        raise ValueError("invalid recipient ID")
+    if not message or len(message) > 4000:
+        raise ValueError("message must contain 1–4000 characters")
+    now = datetime.now(timezone.utc)
+    with _connect() as conn:
+        conn.execute("DELETE FROM nova_instagram_dm_memory WHERE expires_at <= %s", (now,))
+        conn.execute(
+            """INSERT INTO nova_instagram_dm_memory
+               (recipient_id, role, message, created_at, expires_at)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (recipient_id, role, message, now, now + MEMORY_TTL),
+        )
+    return now + MEMORY_TTL
+
+
 class DMMemoryMessage(BaseModel):
     recipient_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
     role: Literal["user", "assistant"]
