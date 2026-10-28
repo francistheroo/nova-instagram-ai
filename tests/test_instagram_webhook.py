@@ -34,7 +34,7 @@ def test_webhook_stores_signed_incoming_text_only(monkeypatch):
     app_secret = "test-app-secret"
     monkeypatch.setenv("META_APP_SECRET", app_secret)
     stored = []
-    monkeypatch.setattr(webhook, "store_dm_message", lambda recipient, role, message: stored.append((recipient, role, message)))
+    monkeypatch.setattr(webhook, "store_dm_message", lambda recipient, role, message, message_id=None: stored.append((recipient, role, message, message_id)))
     payload = {
         "object": "instagram",
         "entry": [{
@@ -54,5 +54,5 @@ def test_webhook_stores_signed_incoming_text_only(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["stored_text_messages"] == 1
-    assert stored == [("12345", "user", "Hello NOVA")]
+    assert stored == [("12345", "user", "Hello NOVA", None)]
     assert response.json()["automatic_replies_sent"] == 0
