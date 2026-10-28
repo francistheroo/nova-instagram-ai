@@ -146,6 +146,28 @@ def load_instagram_token(instagram_user_id: str) -> Optional[dict]:
     }
 
 
+def load_latest_instagram_token() -> Optional[dict]:
+    """Load the most recently updated account token for this single-account deployment."""
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT instagram_user_id, encrypted_access_token, expires_at, updated_at
+            FROM nova_instagram_tokens
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    if row is None:
+        return None
+    token = decrypt_access_token(row["encrypted_access_token"])
+    return {
+        "instagram_user_id": row["instagram_user_id"],
+        "access_token": token,
+        "expires_at": row["expires_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
 def delete_instagram_token(instagram_user_id: str) -> bool:
     """Remove a connected account's stored credential."""
     with _connect() as conn:
