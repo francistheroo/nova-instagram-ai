@@ -26,6 +26,7 @@ main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;alig
 <main>
 <header class="brand"><div class="logo">N</div><div><div class="eyebrow">AI assistant</div><h1>NOVA Content Studio</h1><p class="sub">Create ideas and captions before you post.</p></div></header>
 <div class="notice"><strong>Review mode:</strong> This page only creates drafts. It does not publish, schedule, like, follow, or message anyone. AI provider settings must be configured on the server.</div>
+<section class="card" style="margin-bottom:16px"><h2>Connection checklist</h2><p class="desc">Configuration only — this does not verify live account access.</p><div id="integrationStatus" class="status" role="status">Checking server configuration…</div></section>
 <div class="grid">
 <section class="card">
 <h2>Caption writer</h2><p class="desc">Generate a caption in Manglish, Malayalam, or English.</p>
@@ -49,6 +50,26 @@ main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;alig
 <p class="footer">NOVA Content Studio · Drafts are AI-generated and may need fact-checking and editing. Trend data is not fetched by this tool.</p>
 </main>
 <script>
+async function loadIntegrationStatus() {
+  const target = document.getElementById('integrationStatus');
+  try {
+    const response = await fetch('/integrations/status');
+    if (!response.ok) throw new Error('Status endpoint unavailable');
+    const s = await response.json();
+    const rows = [
+      ['AI text provider', s.ai && s.ai.text_provider_configured],
+      ['Canva OAuth settings', s.canva && s.canva.oauth_environment_ready],
+      ['Instagram OAuth settings', s.instagram && s.instagram.oauth_environment_ready],
+      ['Publishing actions', s.instagram && s.instagram.publishing_enabled]
+    ];
+    target.textContent = rows.map(([label, ready]) => label + ': ' + (ready ? 'configured/enabled' : 'not configured/disabled')).join('\\n')
+      + '\\nLive account verification: not performed.';
+  } catch (_) {
+    target.textContent = 'Could not read configuration status. Draft generation may still work if the AI provider is configured.';
+  }
+}
+loadIntegrationStatus();
+
 async function submitDraft(form, status, output, path, buildBody, render) {
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true; status.textContent = 'Generating…'; output.textContent = '';
