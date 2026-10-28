@@ -1,42 +1,39 @@
 # NOVA — Instagram AI starter
 
-NOVA is a starter backend for a transparent AI character that chats in Manglish, Malayalam script, and English.
+NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded integration scaffolding.
 
-## What this starter does
-- Provides a FastAPI health check and a `/preview-reply` endpoint.
-- Includes NOVA's personality and language instructions.
-- Supports an optional OpenAI-compatible AI endpoint configured through environment variables.
-- Keeps Instagram integration disabled until you create a Meta developer app and authorize your own eligible account.
+## Existing and added functionality
+
+- `GET /health`: reports whether provider credentials are configured (not whether they have been verified).
+- `POST /preview-reply`: generates an AI reply preview; it never sends it to Instagram.
+- `GET /instagram/media`: lists accessible professional-account media through Meta's API.
+- `GET /instagram/media/{media_id}/comments`: reads comments where permitted.
+- `POST /instagram/comments/{comment_id}/reply`: replies to a comment when action endpoints are enabled and the account has permission.
+- `POST /instagram/messages/reply`: attempts a supported message reply for an eligible Instagram-scoped recipient ID.
+- `POST /instagram/publish-image`: creates and publishes an image container from a publicly reachable image URL.
+- `POST /ai/generate-image`: calls a separately configured OpenAI-compatible image-generation API.
+- `GET /canva/status`: reports credential presence only; Canva OAuth, design listing, and export are not implemented.
+
+## Security and setup
+
+1. Configure the official Meta app and authorize the Creator account using the appropriate Instagram Login flow.
+2. In Render's private environment settings, set `META_GRAPH_BASE_URL`, `META_API_VERSION`, `INSTAGRAM_ACCESS_TOKEN`, and `INSTAGRAM_USER_ID` using values appropriate to that flow. The sample API version may need updating to a currently supported version.
+3. Set `NOVA_API_KEY` to a long, random secret. Do not put it in frontend code, public repositories, or chat.
+4. Keep `INSTAGRAM_AUTOMATION_ENABLED=false` while testing read-only endpoints. Set it to `true` only after confirming permissions and testing with content you control.
+5. Add the key as the `X-NOVA-API-Key` header when calling protected NOVA endpoints. Do not expose this key in a public browser client.
+6. Configure `IMAGE_API_BASE_URL`, `IMAGE_API_KEY`, and `IMAGE_MODEL` for an image provider that actually supports the OpenAI-compatible `/images/generations` endpoint. A text-only Groq model is not an image-generation provider.
+7. Use a publicly reachable image URL for Instagram publishing. The image-generation endpoint's returned URL may be temporary; reliable publishing usually needs persistent object storage and a public URL.
+8. Deploy and check `/health`, then test read-only `/instagram/media` before enabling any write action.
 
 ## Important limitations
-This is a starter project, not a deployed or connected Instagram account. It does not automatically publish, send messages, create Notes with music, or follow accounts yet. Meta's official APIs do not expose every Instagram-app feature; general follow/unfollow automation is not supported by the official API.
 
-## Run locally
-1. Install Python 3.11 or newer.
-2. Copy `.env.example` to `.env` and optionally configure an AI provider.
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run:
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000
-   ```
-5. Open `http://127.0.0.1:8000/health`.
+- This is not a complete OAuth application: token acquisition, refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented.
+- Instagram API permissions and endpoint behavior vary by API version and login flow. App review or access approval may be required.
+- Like/unlike automation is not exposed as a supported general action by the standard Instagram API; no like endpoint is implemented.
+- Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
+- Reels audio/music publishing requires a separately verified, supported Meta audio workflow and suitable licensing. This starter does not attach music to Reels.
+- Message sending is subject to Meta messaging permissions, eligible conversations, and messaging windows. Do not use it for unsolicited bulk messages.
+- Canva credentials alone do not provide an integration; OAuth and the required Connect API scopes/endpoints still need to be implemented.
+- Render free instances may sleep, and local disk may not persist. Use persistent storage and a queue/scheduler for reliable automation.
 
-## AI provider setup
-Set `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL` for a compatible API provider. Use only a provider's official endpoint and follow its free-tier limits. If these are blank, `/preview-reply` returns a safe fallback showing the configured personality prompt.
-
-Never put API keys or Meta access tokens in source code or share them in chat.
-
-## Online deployment
-Deploy this folder to a Python host that supports FastAPI. Add environment variables in the host's private environment settings. Free hosts may sleep when idle, and their local disk may not persist. Use a persistent database and an external scheduler for reliable autonomous operation.
-
-## Next steps for official Instagram connection
-1. Confirm the Instagram account is Creator or Business, if required by the selected API route.
-2. Create an app in Meta for Developers.
-3. Configure Instagram Login and request only the permissions needed.
-4. Complete any required app review and business verification.
-5. Store tokens securely in environment secrets or a secret manager.
-6. Implement only supported publishing, comment, messaging, and insights endpoints.
-7. Test with drafts and a test account before enabling autonomous publishing.
+Never commit API keys, access tokens, or secrets.
