@@ -105,6 +105,8 @@ async def receive_instagram_webhook(
                     # 24-hour messaging window. Never infer eligibility from memory TTL.
                     event_timestamp = event.get("timestamp")
                     if not isinstance(event_timestamp, (int, float)) or event_timestamp <= 0:
+                        if event_claimed:
+                            finish_dm_event(event_id, "ignored")
                         skipped += 1
                         continue
                     event_time = datetime.fromtimestamp(event_timestamp / 1000, tz=timezone.utc)
