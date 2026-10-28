@@ -23,7 +23,7 @@ from app.oauth_store import (
 router = APIRouter(prefix="/oauth/instagram", tags=["Instagram OAuth"])
 STATE_COOKIE = "nova_instagram_oauth_state"
 STATE_MAX_AGE_SECONDS = 600
-DEFAULT_SCOPES = "instagram_business_basic"
+DEFAULT_SCOPES = "instagram_business_basic,instagram_business_manage_messages"
 
 
 def _config() -> dict[str, str]:
