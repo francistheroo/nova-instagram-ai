@@ -4,6 +4,8 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 ## Existing and added functionality
 
+- `GET /app`: same-origin NOVA Content Studio page for review-only AI captions and content ideas. It does not publish or schedule content.
+
 - `GET /health`: reports whether provider credentials are configured (not whether they have been verified) and explicitly reports which OAuth, token-refresh, and webhook pieces are not implemented.
 - `POST /preview-reply`: generates an AI reply preview; it never sends it to Instagram.
 - `GET /instagram/media`: lists accessible professional-account media through Meta's API.
