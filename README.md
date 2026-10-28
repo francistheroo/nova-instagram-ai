@@ -11,6 +11,9 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 - `POST /instagram/comments/{comment_id}/reply`: replies to a comment when action endpoints are enabled and the account has permission.
 - `POST /instagram/messages/reply`: attempts a supported message reply for an eligible Instagram-scoped recipient ID.
 - `POST /instagram/publish-image`: creates and publishes an image container from a publicly reachable image URL.
+- `POST /instagram/reels/drafts`: creates a Reel container for review; it does not publish.
+- `GET /instagram/reels/drafts/{container_id}`: checks Meta's processing status without publishing.
+- `POST /instagram/reels/drafts/{container_id}/publish`: explicitly publishes only after Meta reports `FINISHED`.
 - `POST /ai/generate-image`: calls a separately configured OpenAI-compatible image-generation API.
 - `GET /canva/status`: reports Canva integration implementation status without exposing credentials.
 - `GET /canva/designs`: lists the connected user's Canva designs (protected by `X-NOVA-API-Key`).
@@ -71,3 +74,8 @@ Both routes require `X-NOVA-API-Key` and a connected Canva account. Reel export 
 ## Canva export format validation
 
 Before starting an Instagram draft export, NOVA now calls Canva's design export-formats endpoint and checks that the requested PNG or MP4 format is available for that design. If Canva doesn't report the format, NOVA returns a validation error and does not create an export job. This avoids guessing based only on the design's category. The result still requires a manual review; no Instagram content is published by this workflow.
+
+
+## Instagram Reels: review before publishing
+
+The protected Reel workflow uses Meta's official container process. First call `POST /instagram/reels/drafts` with an HTTPS, publicly reachable `video_url`, caption, and `share_to_feed`. This creates a container but does not publish it. Then call `GET /instagram/reels/drafts/{container_id}` and wait until Meta reports `status_code=FINISHED`. After you have reviewed the media and caption, publication requires a separate explicit call to `POST /instagram/reels/drafts/{container_id}/publish`. The publish route rechecks the status and refuses containers that are not ready. These action routes require `X-NOVA-API-Key` and `INSTAGRAM_AUTOMATION_ENABLED=true`, plus valid Meta authorization and content-publishing permissions. The video URL must remain publicly accessible while Meta fetches it. No music is attached by this workflow.
