@@ -20,6 +20,8 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 - `GET /canva/designs/{design_id}/export-formats`: lists supported export formats for a design.
 - `POST /canva/exports`: starts a Canva export job for a supported format.
 - `GET /canva/exports/{job_id}`: checks an asynchronous export job status.
+- `POST /canva/instagram-reels/publish`: exports a Canva design as MP4 and publishes it as a Reel after Meta confirms processing is complete.
+- `POST /canva/instagram-posts/publish`: exports a Canva design as PNG and publishes it as a photo post.
 
 ## Security and setup
 
@@ -53,7 +55,7 @@ To connect: configure the Instagram Login product in the Meta developer dashboar
 - Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
 - Reels audio/music publishing requires a separately verified, supported Meta audio workflow and suitable licensing. This starter does not attach music to Reels.
 - Message sending is subject to Meta messaging permissions, eligible conversations, and messaging windows. Do not use it for unsolicited bulk messages.
-- Canva OAuth uses Authorization Code + PKCE, encrypted PostgreSQL token storage, and a protected manual refresh endpoint at `POST /oauth/canva/refresh` (requires `X-NOVA-API-Key`). Canva refresh tokens rotate and each token is single-use, so the endpoint stores the replacement token bundle immediately. Design listing, export-format lookup, and asynchronous export job routes are implemented in code. A configured Canva developer app and live verification are still required. Canva Connect API access is subject to Canva's app requirements and review.
+- Canva OAuth uses Authorization Code + PKCE, encrypted PostgreSQL token storage, and a protected manual refresh endpoint at `POST /oauth/canva/refresh` (requires `X-NOVA-API-Key`). Canva refresh tokens rotate and each token is single-use, so the endpoint stores the replacement token bundle immediately. Design listing, export-format lookup, asynchronous export jobs, direct Reel publishing, and direct photo-post publishing are implemented in code. A configured Canva developer app and live verification are still required. Canva Connect API access is subject to Canva's app requirements and review.
 - Render free instances may sleep, and local disk may not persist. Use persistent storage and a queue/scheduler for reliable automation.
 
 Never commit API keys, access tokens, or secrets.
@@ -61,7 +63,7 @@ Never commit API keys, access tokens, or secrets.
 
 ## Canva OAuth setup
 
-Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`, `DATABASE_URL`, `OAUTH_STATE_SECRET`, and `TOKEN_ENCRYPTION_KEY` in Render. Register the exact HTTPS redirect URI `https://nova-instagram-ai.onrender.com/oauth/canva/callback` in your Canva developer app (or use the exact URI for your own deployment). Run `python -m app.init_oauth_db` to initialize both OAuth state and encrypted token tables, then visit `/oauth/canva/start`. The callback stores tokens server-side and does not return them to the browser. After connecting, the protected `POST /oauth/canva/refresh` endpoint can manually refresh tokens using `X-NOVA-API-Key`; do not call it concurrently because each refresh token can be used only once. OAuth and design/export routes have not yet been verified against a live Canva app. Export download URLs are temporary and should not be treated as permanent storage.
+Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`, `DATABASE_URL`, `OAUTH_STATE_SECRET`, and `TOKEN_ENCRYPTION_KEY` in Render. Register the exact HTTPS redirect URI `https://nova-instagram-ai.onrender.com/oauth/canva/callback` in your Canva developer app (or use the exact URI for your own deployment). Run `python -m app.init_oauth_db` to initialize both OAuth state and encrypted token tables, then visit `/oauth/canva/start`. The callback stores tokens server-side and does not return them to the browser. After connecting, the protected `POST /oauth/canva/refresh` endpoint can manually refresh tokens using `X-NOVA-API-Key`; do not call it concurrently because each refresh token can be used only once. OAuth, design/export routes, and direct publishing have not yet been verified against a live Canva app and Instagram account. Export download URLs are temporary and should not be treated as permanent storage.
 
 
 ## Canva export to Instagram: manual review gate
@@ -94,3 +96,8 @@ For an explicitly requested direct publish, call `POST /canva/instagram-reels/pu
 ## Direct Canva-to-Instagram photo publishing
 
 Call `POST /canva/instagram-posts/publish` with `{"design_id":"YOUR_CANVA_DESIGN_ID","caption":"Your caption"}` and the `X-NOVA-API-Key` header. NOVA checks PNG export support, waits for Canva's export to finish, creates the Instagram image container, and calls the official publish endpoint. This is a direct publish workflow, not a draft. It requires `INSTAGRAM_AUTOMATION_ENABLED=true`, connected Canva and Instagram accounts, and valid Meta permissions; the action flag stays disabled by default. Canva export URLs expire after 24 hours. Live account and Render verification are still required.
+
+
+## Direct publishing safety and verification status
+
+The direct Canva publishing routes are write actions: `POST /canva/instagram-reels/publish` and `POST /canva/instagram-posts/publish`. Both require the `X-NOVA-API-Key` header, a connected Canva account, valid Instagram authorization and permissions, and `INSTAGRAM_AUTOMATION_ENABLED=true`. Publishing is disabled by default. These endpoints can publish immediately once enabled, so use them only when you intentionally want that exact design and caption posted. Do not test with a real account until you have reviewed the design/caption and confirmed account permissions. Automated tests do not establish that live Canva, Meta, or Render integration works; live verification remains outstanding.
