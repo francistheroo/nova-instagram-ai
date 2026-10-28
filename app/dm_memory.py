@@ -58,6 +58,39 @@ def store_dm_message(recipient_id: str, role: str, message: str) -> datetime:
     return now + MEMORY_TTL
 
 
+async def generate_dm_reply(recipient_id: str, current_message: str) -> str:
+    """Generate a reply using unexpired stored history; caller decides whether to send."""
+    now = datetime.now(timezone.utc)
+    with _connect() as conn:
+        conn.execute("DELETE FROM nova_instagram_dm_memory WHERE expires_at <= %s", (now,))
+        rows = conn.execute(
+            """SELECT role, message FROM nova_instagram_dm_memory
+               WHERE recipient_id = %s AND expires_at > %s
+               ORDER BY created_at DESC LIMIT %s""",
+            (recipient_id, now, MAX_MESSAGES_PER_CONVERSATION),
+        ).fetchall()
+    base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("AI_API_KEY", "")
+    model = os.getenv("AI_MODEL", "")
+    if not (base_url and api_key and model):
+        raise RuntimeError("AI text provider is not configured.")
+    history = list(reversed(rows))
+    messages = [{"role": "system", "content": NOVA_SYSTEM_PROMPT}]
+    for row in history:
+        messages.append({"role": row["role"], "content": row["message"]})
+    if not history or history[-1]["role"] != "user" or history[-1]["message"] != current_message:
+        messages.append({"role": "user", "content": current_message})
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        response = await client.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"model": model, "messages": messages, "temperature": 0.8},
+        )
+    if response.is_error:
+        raise RuntimeError("AI provider rejected the reply request.")
+    return response.json()["choices"][0]["message"]["content"]
+
+
 class DMReplyPreviewRequest(BaseModel):
     recipient_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
     message: str = Field(min_length=1, max_length=4000)
