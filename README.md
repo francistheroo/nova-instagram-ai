@@ -27,18 +27,20 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 ## OAuth security foundation
 
-The `app/oauth_security.py` module provides signed, time-limited state values and Fernet token-encryption helpers. The proposed `app/oauth_store.py` module adds PostgreSQL helpers for storing encrypted tokens and atomically consuming OAuth state nonces. These helpers are foundations, not a complete OAuth flow: no OAuth routes call them yet, and the app does not yet perform authorization-code exchange or token refresh.
+The `app/oauth_security.py` module provides signed, time-limited state values and Fernet token-encryption helpers. The `app/oauth_store.py` module adds PostgreSQL helpers for encrypted tokens and one-time OAuth state. The `/oauth/instagram/start` and `/oauth/instagram/callback` routes now implement the Instagram Login redirect, browser-bound state validation, server-side code exchange, long-lived token exchange, and encrypted token storage. Automatic token refresh, webhook subscription, and production end-to-end verification are still not implemented.
 
 For a deployment using the PostgreSQL store, configure:
 - `DATABASE_URL`: private PostgreSQL connection string from the database provider.
 - `OAUTH_STATE_SECRET`: a randomly generated secret of at least 32 characters.
 - `TOKEN_ENCRYPTION_KEY`: a Fernet key generated with Python's `cryptography` package (keep it outside the database and repository).
 
-Run `initialize_schema()` as an explicit deployment/migration step before using the storage helpers. Do not expose decrypted tokens to browser clients or logs. OAuth state must be bound to the initiating browser session in addition to signature/age checks; store and consume its nonce exactly once. Do not enable write actions until the full flow and token renewal are implemented and tested.
+Run `python -m app.init_oauth_db` as a deployment/migration step before the app handles OAuth requests. Register the exact `INSTAGRAM_OAUTH_REDIRECT_URI` in the Meta app and keep the client secret server-side. Do not expose decrypted tokens to browser clients or logs. OAuth state must be bound to the initiating browser session in addition to signature/age checks; store and consume its nonce exactly once. Do not enable write actions until the full flow and token renewal are implemented and tested.
+
+To connect: configure the Instagram Login product in the Meta developer dashboard, set `INSTAGRAM_OAUTH_CLIENT_ID`, `INSTAGRAM_OAUTH_CLIENT_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_OAUTH_SCOPES`, `OAUTH_STATE_SECRET`, `TOKEN_ENCRYPTION_KEY`, and `DATABASE_URL` in Render; initialize the database schema; then visit `/oauth/instagram/start`. The callback stores the credential server-side and does not return the token to the browser. Use HTTPS and register the exact callback URI.
 
 ## Important limitations
 
-- This is not a complete OAuth application: token acquisition, refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
+- OAuth authorization-code exchange and encrypted token persistence are implemented in code but have not been verified against a real Meta app. Automatic token refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
 - Instagram API permissions and endpoint behavior vary by API version and login flow. App review or access approval may be required.
 - Like/unlike automation is not implemented in this starter.
 - Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
