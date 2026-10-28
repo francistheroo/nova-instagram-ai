@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
@@ -17,6 +17,7 @@ from app.oauth_store import (
     consume_oauth_state,
     save_instagram_token,
     save_oauth_state,
+    load_latest_instagram_token,
 )
 
 router = APIRouter(prefix="/oauth/instagram", tags=["Instagram OAuth"])
@@ -161,3 +162,59 @@ async def instagram_oauth_callback(
     # The redirect contains no access token or account credential.
     response.headers["Location"] = "/?instagram_connected=pending_verification"
     return response
+
+
+
+@router.post("/refresh")
+async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=None)):
+    """Manually refresh the stored long-lived token without exposing it to the caller."""
+    expected_key = os.getenv("NOVA_API_KEY", "")
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="NOVA_API_KEY is not configured.")
+    import hmac
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected_key):
+        raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
+
+    try:
+        stored = load_latest_instagram_token()
+    except (OAuthStoreError, OAuthSecurityError):
+        raise HTTPException(status_code=503, detail="Instagram token storage is unavailable or cannot decrypt the stored token.") from None
+    if not stored:
+        raise HTTPException(status_code=404, detail="No OAuth-connected Instagram account was found.")
+
+    expires_at = stored.get("expires_at")
+    if expires_at is not None and expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=409, detail="The stored token has expired. Reconnect Instagram instead of trying to refresh it.")
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                f"https://graph.instagram.com/refresh_access_token",
+                params={
+                    "grant_type": "ig_refresh_token",
+                    "access_token": stored["access_token"],
+                },
+            )
+        if response.is_error:
+            raise HTTPException(status_code=502, detail="Instagram token refresh failed. Reconnect the account if the token is no longer refreshable.")
+        payload = response.json()
+        refreshed_token = payload.get("access_token") if isinstance(payload, dict) else None
+        expires_in = payload.get("expires_in") if isinstance(payload, dict) else None
+        if not refreshed_token:
+            raise HTTPException(status_code=502, detail="Instagram did not return a refreshed token.")
+        refreshed_expiry = (
+            datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+            if isinstance(expires_in, (int, float)) and expires_in > 0
+            else expires_at
+        )
+        save_instagram_token(
+            str(stored["instagram_user_id"]),
+            refreshed_token,
+            expires_at=refreshed_expiry,
+        )
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError, TypeError, OAuthStoreError, OAuthSecurityError):
+        raise HTTPException(status_code=502, detail="Token refresh could not be completed. Check server configuration without logging secrets.") from None
+
+    return {"status": "refreshed", "instagram_user_id": str(stored["instagram_user_id"]), "expires_at": refreshed_expiry.isoformat() if refreshed_expiry else None, "token_returned": False}
