@@ -3,6 +3,7 @@
 Exports are temporary. This module can create an Instagram Reel container from a
 successful Canva MP4 export, but never publishes it.
 """
+import os
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -127,6 +128,11 @@ async def create_instagram_reel_draft_from_canva_export(
     """Turn a completed Canva MP4 export into an Instagram Reel container, never publish."""
     if not _valid_job_id(job_id):
         raise HTTPException(status_code=422, detail="Invalid Canva export job ID.")
+    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
+        raise HTTPException(
+            status_code=403,
+            detail="Instagram actions are disabled. Enable only after testing and authorization.",
+        )
 
     export_payload = await _canva_request("GET", f"exports/{job_id}")
     job = export_payload.get("job", {})
@@ -150,14 +156,8 @@ async def create_instagram_reel_draft_from_canva_export(
             detail="Canva did not return a usable HTTPS export URL.",
         )
 
-    import os
     from app.main import instagram_config, meta_request
 
-    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
-        raise HTTPException(
-            status_code=403,
-            detail="Instagram actions are disabled. Enable only after testing and authorization.",
-        )
     _, user_id, _ = instagram_config()
     container = await meta_request(
         "POST",
