@@ -27,7 +27,7 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 ## OAuth security foundation
 
-The `app/oauth_security.py` module provides signed, time-limited state values and Fernet token-encryption helpers. The `app/oauth_store.py` module adds PostgreSQL helpers for encrypted tokens and one-time OAuth state. The `/oauth/instagram/start` and `/oauth/instagram/callback` routes now implement the Instagram Login redirect, browser-bound state validation, server-side code exchange, long-lived token exchange, and encrypted token storage. Automatic token refresh, webhook subscription, and production end-to-end verification are still not implemented.
+The `app/oauth_security.py` module provides signed, time-limited state values and Fernet token-encryption helpers. The `app/oauth_store.py` module adds PostgreSQL helpers for encrypted tokens and one-time OAuth state. The `/oauth/instagram/start` and `/oauth/instagram/callback` routes now implement the Instagram Login redirect, browser-bound state validation, server-side code exchange, long-lived token exchange, and encrypted token storage. A protected manual refresh endpoint is available at `POST /oauth/instagram/refresh` using the `X-NOVA-API-Key` header. It refreshes the stored long-lived token when Instagram permits it; expired tokens still require reconnecting. Automatic scheduled refresh, webhook subscription, and production end-to-end verification are still not implemented.
 
 For a deployment using the PostgreSQL store, configure:
 - `DATABASE_URL`: private PostgreSQL connection string from the database provider.
@@ -40,7 +40,7 @@ To connect: configure the Instagram Login product in the Meta developer dashboar
 
 ## Important limitations
 
-- OAuth authorization-code exchange and encrypted token persistence are implemented in code but have not been verified against a real Meta app. Automatic token refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
+- OAuth authorization-code exchange, encrypted token persistence, and a protected manual token refresh route are implemented in code but have not been verified against a real Meta app. Automatic scheduled token refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
 - Instagram API permissions and endpoint behavior vary by API version and login flow. App review or access approval may be required.
 - Like/unlike automation is not implemented in this starter.
 - Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
