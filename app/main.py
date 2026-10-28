@@ -7,9 +7,11 @@ from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
+from app.instagram_oauth import router as instagram_oauth_router
 
 load_dotenv()
-app = FastAPI(title="NOVA Instagram AI", version="0.2.0")
+app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
+app.include_router(instagram_oauth_router)
 
 
 class ReplyRequest(BaseModel):
