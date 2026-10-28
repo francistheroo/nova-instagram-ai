@@ -33,7 +33,7 @@ def test_health_does_not_claim_instagram_is_connected(monkeypatch):
     assert payload["instagram_token_refresh_implemented"] is True
     assert payload["instagram_webhooks_implemented"] is False
     assert payload["canva_configured"] is False
-    assert payload["canva_oauth_implemented"] is False
+    assert payload["canva_oauth_implemented"] is True
     assert payload["image_generation_configured"] is False
 
 
