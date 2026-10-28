@@ -133,6 +133,7 @@ async def health():
         "image_generation_configured": bool(os.getenv("IMAGE_API_BASE_URL") and os.getenv("IMAGE_API_KEY") and os.getenv("IMAGE_MODEL")),
         "canva_configured": bool(os.getenv("CANVA_CLIENT_ID") and os.getenv("CANVA_CLIENT_SECRET")),
         "canva_oauth_implemented": True,
+        "canva_token_refresh_implemented": True,
         "notes_music_supported": False,
         "instagram_like_actions_supported": False,
     }
@@ -274,5 +275,6 @@ async def canva_status():
         "oauth_implemented": True,
         "design_listing_implemented": True,
         "export_implemented": True,
-        "message": "Canva OAuth, design listing, export-format lookup, and asynchronous export routes are implemented in code. A configured Canva app and live verification are still required; expired-token refresh is not implemented.",
+        "token_refresh_implemented": True,
+        "message": "Canva OAuth, manual token refresh, design listing, export-format lookup, and asynchronous export routes are implemented in code. A configured Canva app and live verification are still required.",
     }
