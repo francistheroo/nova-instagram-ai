@@ -25,6 +25,7 @@ def test_duplicate_message_id_is_not_replied_to_twice(monkeypatch):
         raise AssertionError("duplicate webhook must not generate another reply")
 
     monkeypatch.setattr(webhook, "store_dm_message", duplicate_store)
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda message_id: False)
     monkeypatch.setattr(webhook, "generate_dm_reply", should_not_generate)
     payload = {
         "object": "instagram",
