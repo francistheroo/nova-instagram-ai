@@ -122,7 +122,7 @@ async def health():
         "service": "NOVA Instagram AI",
         "instagram_configured": bool(os.getenv("INSTAGRAM_ACCESS_TOKEN") and os.getenv("INSTAGRAM_USER_ID")),
         "instagram_oauth_implemented": True,
-        "instagram_token_refresh_implemented": False,
+        "instagram_token_refresh_implemented": True,
         "instagram_webhooks_implemented": False,
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
         "ai_configured": bool(os.getenv("AI_BASE_URL") and os.getenv("AI_API_KEY") and os.getenv("AI_MODEL")),
