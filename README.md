@@ -129,3 +129,8 @@ The protected 12-hour memory store now has a webhook receiver:
 Set `META_APP_SECRET` and a long random `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` in the server environment, configure the HTTPS webhook URL in Meta, and subscribe to the required Instagram messaging events only after the app/account has the required access. Keep `DATABASE_URL` configured and run `python -m app.init_oauth_db`.
 
 This code and automated tests do not establish live Meta webhook delivery or permission approval. After live delivery is verified, the next integration step is to load the stored context into NOVA's reply-generation prompt; automatic replying remains intentionally off.
+
+
+### Memory-aware DM reply drafts
+
+`POST /instagram/dm-memory/preview-reply` is a protected, draft-only endpoint. Send `recipient_id`, the latest `message`, and optional `language_hint` with `X-NOVA-API-Key`. It loads the last 12 hours of stored messages (up to 30) and uses the configured AI text provider to produce a reply preview. The response explicitly reports `sent_to_instagram: false`; it does not send or save the generated draft as a conversation turn. Real incoming text is added to memory only by the verified webhook, so webhook delivery and permissions must be configured for full behavior.
