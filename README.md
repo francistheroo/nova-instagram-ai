@@ -4,7 +4,7 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 ## Existing and added functionality
 
-- `GET /health`: reports whether provider credentials are configured (not whether they have been verified).
+- `GET /health`: reports whether provider credentials are configured (not whether they have been verified) and explicitly reports which OAuth, token-refresh, and webhook pieces are not implemented.
 - `POST /preview-reply`: generates an AI reply preview; it never sends it to Instagram.
 - `GET /instagram/media`: lists accessible professional-account media through Meta's API.
 - `GET /instagram/media/{media_id}/comments`: reads comments where permitted.
@@ -27,9 +27,9 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 ## Important limitations
 
-- This is not a complete OAuth application: token acquisition, refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented.
+- This is not a complete OAuth application: token acquisition, refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
 - Instagram API permissions and endpoint behavior vary by API version and login flow. App review or access approval may be required.
-- Like/unlike automation is not exposed as a supported general action by the standard Instagram API; no like endpoint is implemented.
+- Like/unlike automation is not implemented in this starter.
 - Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
 - Reels audio/music publishing requires a separately verified, supported Meta audio workflow and suitable licensing. This starter does not attach music to Reels.
 - Message sending is subject to Meta messaging permissions, eligible conversations, and messaging windows. Do not use it for unsolicited bulk messages.
