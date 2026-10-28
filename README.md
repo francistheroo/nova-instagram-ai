@@ -15,6 +15,8 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 - `GET /instagram/reels/drafts/{container_id}`: checks Meta's processing status without publishing.
 - `POST /instagram/reels/drafts/{container_id}/publish`: explicitly publishes only after Meta reports `FINISHED`.
 - `POST /ai/generate-image`: calls a separately configured OpenAI-compatible image-generation API.
+- `POST /ai/generate-caption`: generates a review-only Instagram caption draft in the requested language and tone; it never publishes.
+- `POST /ai/content-ideas`: generates original post/Reel/carousel ideas for a niche; ideas are drafts, not verified live trends, and are never scheduled or published.
 - `GET /canva/status`: reports Canva integration implementation status without exposing credentials.
 - `GET /canva/designs`: lists the connected user's Canva designs (protected by `X-NOVA-API-Key`).
 - `GET /canva/designs/{design_id}/export-formats`: lists supported export formats for a design.
