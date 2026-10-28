@@ -49,4 +49,4 @@ def test_duplicate_message_id_is_not_replied_to_twice(monkeypatch):
     assert response.json()["stored_text_messages"] == 0
     assert response.json()["automatic_replies_sent"] == 0
     assert response.json()["automatic_replies_skipped"] == 1
-    assert stored_calls == [("12345", "user", "Hi NOVA", "mid.duplicate.1")]
+    assert stored_calls == []
