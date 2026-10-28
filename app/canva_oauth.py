@@ -7,12 +7,12 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
 from app.oauth_store import OAuthStoreError, consume_oauth_state, save_oauth_state
-from app.canva_store import CanvaStoreError, save_canva_tokens
+from app.canva_store import CanvaStoreError, load_latest_canva_tokens, save_canva_tokens
 
 router = APIRouter(prefix="/oauth/canva", tags=["Canva OAuth"])
 
@@ -26,6 +26,15 @@ def _config() -> tuple[str, str, str]:
     if not redirect_uri.startswith("https://"):
         raise HTTPException(status_code=503, detail="CANVA_REDIRECT_URI must use HTTPS.")
     return client_id, client_secret, redirect_uri
+
+
+def _require_nova_key(x_nova_api_key: str | None = Header(default=None)):
+    expected = os.getenv("NOVA_API_KEY", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Set NOVA_API_KEY in server environment before using Canva refresh.")
+    if not x_nova_api_key or not secrets.compare_digest(x_nova_api_key, expected):
+        raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
+    return True
 
 
 @router.get("/start")
@@ -114,3 +123,44 @@ async def canva_oauth_callback(
     response.delete_cookie("nova_canva_oauth_state", path="/oauth/canva")
     response.delete_cookie("nova_canva_pkce_verifier", path="/oauth/canva")
     return response
+
+
+@router.post("/refresh")
+async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
+    """Rotate a Canva refresh token and store the replacement credentials encrypted."""
+    client_id, client_secret, _ = _config()
+    try:
+        current = load_latest_canva_tokens()
+    except CanvaStoreError:
+        raise HTTPException(status_code=503, detail="Canva token storage is unavailable or could not be decrypted.") from None
+    if not current:
+        raise HTTPException(status_code=503, detail="Canva is not connected. Complete /oauth/canva/start first.")
+    refresh_token = current.get("refresh_token")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        raise HTTPException(status_code=503, detail="No Canva refresh token is stored. Reconnect Canva to grant access again.")
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                "https://api.canva.com/rest/v1/oauth/token",
+                auth=(client_id, client_secret),
+                data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        if response.is_error:
+            raise HTTPException(status_code=502, detail="Canva token refresh failed. Reconnect Canva if the refresh token has been revoked or already used.")
+        replacement = response.json()
+        if not isinstance(replacement, dict) or not replacement.get("access_token") or not replacement.get("refresh_token"):
+            raise HTTPException(status_code=502, detail="Canva did not return a complete replacement token bundle.")
+        # Keep the existing account key if Canva omits user_id from refresh responses.
+        if current.get("user_id") and not replacement.get("user_id"):
+            replacement["user_id"] = current["user_id"]
+        expires_in = replacement.get("expires_in")
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in)) if isinstance(expires_in, (int, float)) and expires_in > 0 else None
+        save_canva_tokens(replacement, expires_at=expires_at)
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError, TypeError, CanvaStoreError):
+        raise HTTPException(status_code=502, detail="Canva token refresh could not be completed. Check server configuration without logging credentials.") from None
+
+    return {"refreshed": True, "expires_at": expires_at.isoformat() if expires_at else None, "token_returned": False}
