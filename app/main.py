@@ -1,15 +1,15 @@
 import os
-from typing import Optional
+from typing import Optional, Any
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, Header, HTTPException, Depends
+from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
 
 load_dotenv()
-app = FastAPI(title="NOVA Instagram AI", version="0.1.0")
+app = FastAPI(title="NOVA Instagram AI", version="0.2.0")
 
 
 class ReplyRequest(BaseModel):
@@ -17,19 +17,94 @@ class ReplyRequest(BaseModel):
     language_hint: Optional[str] = Field(default=None, max_length=30)
 
 
+class CommentReplyRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2200)
+
+
+class PublishImageRequest(BaseModel):
+    image_url: HttpUrl
+    caption: str = Field(default="", max_length=2200)
+
+
+class MessageReplyRequest(BaseModel):
+    recipient_id: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class ImageGenerationRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+    size: str = Field(default="1024x1024", pattern=r"^(1024x1024|1024x1536|1536x1024)$")
+
+
+def require_nova_key(x_nova_api_key: Optional[str] = Header(default=None)):
+    expected = os.getenv("NOVA_API_KEY", "")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Set NOVA_API_KEY in Render environment variables before using action endpoints.",
+        )
+    if not x_nova_api_key or x_nova_api_key != expected:
+        raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
+    return True
+
+
+def instagram_config():
+    token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+    user_id = os.getenv("INSTAGRAM_USER_ID", "")
+    if not token or not user_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Instagram is not connected yet. Configure INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_USER_ID in Render.",
+        )
+    base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
+    version = os.getenv("META_API_VERSION", "v23.0").strip("/")
+    return token, user_id, f"{base}/{version}"
+
+
+async def meta_request(method: str, path: str, *, params: Optional[dict] = None, data: Optional[dict] = None) -> dict[str, Any]:
+    token, _, graph_base = instagram_config()
+    request_params = dict(params or {})
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.request(
+            method,
+            f"{graph_base}/{path.lstrip('/')}",
+            params=request_params,
+            data=data,
+            headers=headers,
+        )
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {"detail": response.text[:1000]}
+    if response.is_error:
+        error = payload.get("error", payload) if isinstance(payload, dict) else payload
+        raise HTTPException(status_code=response.status_code, detail={"instagram_api_error": error})
+    return payload
+
+
+@app.get("/")
+async def root():
+    return {
+        "service": "NOVA Instagram AI",
+        "status": "online",
+        "docs": "/docs",
+        "note": "AI preview works separately. Instagram actions require official Meta authorization and environment configuration.",
+    }
+
+
 @app.get("/health")
 async def health():
     return {
         "status": "ok",
         "service": "NOVA Instagram AI",
-        "instagram_automation_enabled": os.getenv(
-            "INSTAGRAM_AUTOMATION_ENABLED", "false"
-        ).lower() == "true",
-        "ai_configured": bool(
-            os.getenv("AI_BASE_URL")
-            and os.getenv("AI_API_KEY")
-            and os.getenv("AI_MODEL")
-        ),
+        "instagram_configured": bool(os.getenv("INSTAGRAM_ACCESS_TOKEN") and os.getenv("INSTAGRAM_USER_ID")),
+        "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
+        "ai_configured": bool(os.getenv("AI_BASE_URL") and os.getenv("AI_API_KEY") and os.getenv("AI_MODEL")),
+        "image_generation_configured": bool(os.getenv("IMAGE_API_BASE_URL") and os.getenv("IMAGE_API_KEY") and os.getenv("IMAGE_MODEL")),
+        "canva_configured": bool(os.getenv("CANVA_CLIENT_ID") and os.getenv("CANVA_CLIENT_SECRET")),
+        "notes_music_supported": False,
+        "instagram_like_actions_supported": False,
     }
 
 
@@ -51,16 +126,13 @@ async def preview_reply(body: ReplyRequest):
             "sent_to_instagram": False,
         }
 
-    # OpenAI-compatible chat completions endpoint. Configure base URL to the
-    # provider's documented API root, typically ending in /v1.
-    url = f"{base_url}/chat/completions"
     user_message = body.message
     if body.language_hint:
         user_message += f"\n\nLanguage preference hint: {body.language_hint}"
 
     async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
-            url,
+            f"{base_url}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
                 "model": model,
@@ -71,12 +143,106 @@ async def preview_reply(body: ReplyRequest):
                 "temperature": 0.8,
             },
         )
-        response.raise_for_status()
+        if response.is_error:
+            raise HTTPException(status_code=502, detail="AI provider request failed. Check provider settings in Render.")
         data = response.json()
 
     reply = data["choices"][0]["message"]["content"]
+    return {"reply": reply, "mode": "ai", "sent_to_instagram": False}
+
+
+@app.get("/instagram/media")
+async def list_instagram_media(_: bool = Depends(require_nova_key)):
+    """List media available to the authorized Instagram professional account."""
+    _, user_id, _ = instagram_config()
+    return await meta_request(
+        "GET",
+        f"{user_id}/media",
+        params={"fields": "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count", "limit": "25"},
+    )
+
+
+@app.get("/instagram/media/{media_id}/comments")
+async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
+    return await meta_request(
+        "GET",
+        f"{media_id}/comments",
+        params={"fields": "id,text,timestamp,username", "limit": "50"},
+    )
+
+
+@app.post("/instagram/comments/{comment_id}/reply")
+async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool = Depends(require_nova_key)):
+    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="Instagram actions are disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after testing and authorization.")
+    return await meta_request("POST", f"{comment_id}/replies", data={"message": body.message})
+
+
+@app.post("/instagram/messages/reply")
+async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_nova_key)):
+    """Send a reply to an eligible Instagram-scoped recipient ID after Meta messaging authorization."""
+    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="Instagram actions are disabled. Enable only after testing and authorization.")
+    _, user_id, _ = instagram_config()
+    return await meta_request(
+        "POST",
+        f"{user_id}/messages",
+        data={
+            "recipient": __import__("json").dumps({"id": body.recipient_id}),
+            "message": __import__("json").dumps({"text": body.message}),
+        },
+    )
+
+
+@app.post("/instagram/publish-image")
+async def publish_image(body: PublishImageRequest, _: bool = Depends(require_nova_key)):
+    """Publish a publicly reachable image URL using Instagram's content publishing flow."""
+    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="Publishing is disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after an authorized test.")
+    _, user_id, _ = instagram_config()
+    container = await meta_request(
+        "POST",
+        f"{user_id}/media",
+        data={"image_url": str(body.image_url), "caption": body.caption, "media_type": "IMAGE"},
+    )
+    creation_id = container.get("id")
+    if not creation_id:
+        raise HTTPException(status_code=502, detail={"message": "Instagram did not return a media container ID", "response": container})
+    published = await meta_request(
+        "POST",
+        f"{user_id}/media_publish",
+        data={"creation_id": creation_id},
+    )
+    return {"container": container, "published": published, "status": "published_if_confirmed_by_meta"}
+
+
+@app.post("/ai/generate-image")
+async def generate_image(body: ImageGenerationRequest, _: bool = Depends(require_nova_key)):
+    """Call a separately configured OpenAI-compatible image-generation API."""
+    base_url = os.getenv("IMAGE_API_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("IMAGE_API_KEY", "")
+    model = os.getenv("IMAGE_MODEL", "")
+    if not (base_url and api_key and model):
+        raise HTTPException(status_code=503, detail="Image generation is not configured. Add IMAGE_API_BASE_URL, IMAGE_API_KEY, and IMAGE_MODEL in Render.")
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        response = await client.post(
+            f"{base_url}/images/generations",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"model": model, "prompt": body.prompt, "size": body.size, "n": 1},
+        )
+    if response.is_error:
+        raise HTTPException(status_code=502, detail="Image provider request failed. Check its API compatibility and Render settings.")
+    payload = response.json()
+    return {"provider_response": payload, "note": "A returned image URL must be publicly accessible to Instagram before publishing."}
+
+
+@app.get("/canva/status")
+async def canva_status():
+    """Credential presence only; Canva OAuth and design/export routes are not implemented yet."""
     return {
-        "reply": reply,
-        "mode": "ai",
-        "sent_to_instagram": False,
+        "configured": bool(os.getenv("CANVA_CLIENT_ID") and os.getenv("CANVA_CLIENT_SECRET")),
+        "oauth_implemented": False,
+        "design_listing_implemented": False,
+        "export_implemented": False,
+        "message": "Canva credentials alone do not connect an account. OAuth, scopes, and Connect API calls are still required.",
     }
