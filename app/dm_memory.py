@@ -38,7 +38,7 @@ def _require_nova_key(x_nova_api_key: str | None = Header(default=None, alias="X
         raise HTTPException(status_code=401, detail="A valid X-NOVA-API-Key is required.")
 
 
-def store_dm_message(recipient_id: str, role: str, message: str) -> datetime:
+def store_dm_message(recipient_id: str, role: str, message: str, message_id: str | None = None) -> datetime | None:
     """Internal helper for trusted webhook ingestion; returns the expiry time."""
     if role not in ("user", "assistant"):
         raise ValueError("role must be user or assistant")
@@ -49,12 +49,24 @@ def store_dm_message(recipient_id: str, role: str, message: str) -> datetime:
     now = datetime.now(timezone.utc)
     with _connect() as conn:
         conn.execute("DELETE FROM nova_instagram_dm_memory WHERE expires_at <= %s", (now,))
-        conn.execute(
-            """INSERT INTO nova_instagram_dm_memory
-               (recipient_id, role, message, created_at, expires_at)
-               VALUES (%s, %s, %s, %s, %s)""",
-            (recipient_id, role, message, now, now + MEMORY_TTL),
-        )
+        if message_id is not None:
+            result = conn.execute(
+                """INSERT INTO nova_instagram_dm_memory
+                   (recipient_id, role, message, created_at, expires_at, message_id)
+                   VALUES (%s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (message_id) WHERE message_id IS NOT NULL DO NOTHING
+                   RETURNING id""",
+                (recipient_id, role, message, now, now + MEMORY_TTL, message_id),
+            )
+            if result.fetchone() is None:
+                return None
+        else:
+            conn.execute(
+                """INSERT INTO nova_instagram_dm_memory
+                   (recipient_id, role, message, created_at, expires_at)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (recipient_id, role, message, now, now + MEMORY_TTL),
+            )
     return now + MEMORY_TTL
 
 
@@ -254,10 +266,13 @@ def initialize_schema() -> None:
                 role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
                 message TEXT NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL,
-                expires_at TIMESTAMPTZ NOT NULL
+                expires_at TIMESTAMPTZ NOT NULL,
+                message_id TEXT
             )
             """
         )
+        conn.execute("ALTER TABLE nova_instagram_dm_memory ADD COLUMN IF NOT EXISTS message_id TEXT")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS nova_instagram_dm_memory_message_id_idx ON nova_instagram_dm_memory (message_id) WHERE message_id IS NOT NULL")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS nova_instagram_dm_memory_expiry_idx ON nova_instagram_dm_memory (expires_at)"
         )
