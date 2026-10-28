@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
 from app.instagram_oauth import router as instagram_oauth_router
+from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
@@ -51,17 +52,35 @@ def require_nova_key(x_nova_api_key: Optional[str] = Header(default=None)):
 
 
 def instagram_config():
-    token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
-    user_id = os.getenv("INSTAGRAM_USER_ID", "")
+    token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip()
+    user_id = os.getenv("INSTAGRAM_USER_ID", "").strip()
+    if token and user_id:
+        base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
+        version = os.getenv("META_API_VERSION", "v25.0").strip("/")
+        return token, user_id, f"{base}/{version}"
+
+    # OAuth-connected credentials are read from encrypted PostgreSQL storage.
+    try:
+        stored = load_instagram_token(user_id) if user_id else load_latest_instagram_token()
+    except OAuthStoreError:
+        stored = None
+    except Exception:
+        stored = None
+    if stored:
+        expiry = stored.get("expires_at")
+        if expiry is not None and expiry <= __import__("datetime").datetime.now(__import__("datetime").timezone.utc):
+            raise HTTPException(status_code=503, detail="Instagram access token has expired. Reconnect Instagram; automatic refresh is not implemented yet.")
+        token = stored["access_token"]
+        user_id = user_id or stored["instagram_user_id"]
+
     if not token or not user_id:
         raise HTTPException(
             status_code=503,
-            detail="Instagram is not connected yet. Configure INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_USER_ID in Render.",
+            detail="Instagram is not connected yet. Configure OAuth and PostgreSQL, or set INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_USER_ID in Render.",
         )
     base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
-    version = os.getenv("META_API_VERSION", "v23.0").strip("/")
+    version = os.getenv("META_API_VERSION", "v25.0").strip("/")
     return token, user_id, f"{base}/{version}"
-
 
 async def meta_request(method: str, path: str, *, params: Optional[dict] = None, data: Optional[dict] = None) -> dict[str, Any]:
     token, _, graph_base = instagram_config()
