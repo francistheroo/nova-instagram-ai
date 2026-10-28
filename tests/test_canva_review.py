@@ -14,7 +14,7 @@ def test_canva_instagram_draft_export_requires_key(monkeypatch):
     assert response.status_code == 401
 
 
-def test_canva_post_export_stops_for_manual_review(monkeypatch):
+def test_canva_post_export_checks_format_and_stops_for_review(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     from app import canva_review
 
@@ -22,6 +22,8 @@ def test_canva_post_export_stops_for_manual_review(monkeypatch):
 
     async def fake_request(method, path, *, params=None, json_body=None):
         calls.append((method, path, json_body))
+        if method == "GET" and path.endswith("/export-formats"):
+            return {"formats": [{"type": "png"}, {"type": "mp4"}]}
         return {"job": {"id": "job_123", "status": "in_progress"}}
 
     monkeypatch.setattr(canva_review, "_canva_request", fake_request)
@@ -34,8 +36,10 @@ def test_canva_post_export_stops_for_manual_review(monkeypatch):
     payload = response.json()
     assert payload["review_required"] is True
     assert payload["published"] is False
+    assert payload["available_formats_checked"] is True
     assert payload["caption"] == "Hello"
-    assert calls[0][2] == {"design_id": "design_123", "format": {"type": "png"}}
+    assert calls[0][0:2] == ("GET", "designs/design_123/export-formats")
+    assert calls[1][2] == {"design_id": "design_123", "format": {"type": "png"}}
 
 
 def test_canva_reel_export_uses_vertical_mp4_and_never_publishes(monkeypatch):
@@ -46,6 +50,8 @@ def test_canva_reel_export_uses_vertical_mp4_and_never_publishes(monkeypatch):
 
     async def fake_request(method, path, *, params=None, json_body=None):
         calls.append((method, path, json_body))
+        if method == "GET" and path.endswith("/export-formats"):
+            return {"formats": [{"type": "png"}, {"type": "mp4"}]}
         return {"job": {"id": "job_456", "status": "in_progress"}}
 
     monkeypatch.setattr(canva_review, "_canva_request", fake_request)
@@ -56,10 +62,31 @@ def test_canva_reel_export_uses_vertical_mp4_and_never_publishes(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["published"] is False
-    assert calls[0][2] == {
+    assert calls[1][2] == {
         "design_id": "design_456",
         "format": {"type": "mp4", "quality": "vertical_1080p"},
     }
+
+
+def test_canva_export_rejects_unsupported_format_before_creating_job(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    from app import canva_review
+
+    calls = []
+
+    async def fake_request(method, path, *, params=None, json_body=None):
+        calls.append((method, path, json_body))
+        return {"formats": [{"type": "pdf"}]}
+
+    monkeypatch.setattr(canva_review, "_canva_request", fake_request)
+    response = client.post(
+        "/canva/instagram-draft-exports",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"design_id": "design_789", "target": "reel"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["available_formats"] == ["pdf"]
+    assert len(calls) == 1
 
 
 def test_canva_draft_export_poll_returns_review_url_not_publish(monkeypatch):
