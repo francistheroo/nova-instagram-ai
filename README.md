@@ -12,7 +12,7 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 - `POST /instagram/messages/reply`: attempts a supported message reply for an eligible Instagram-scoped recipient ID.
 - `POST /instagram/publish-image`: creates and publishes an image container from a publicly reachable image URL.
 - `POST /ai/generate-image`: calls a separately configured OpenAI-compatible image-generation API.
-- `GET /canva/status`: reports credential presence only; Canva OAuth, design listing, and export are not implemented.
+- `GET /canva/status`: reports Canva OAuth/design/export implementation status without exposing credentials.
 
 ## Security and setup
 
@@ -40,13 +40,18 @@ To connect: configure the Instagram Login product in the Meta developer dashboar
 
 ## Important limitations
 
-- OAuth authorization-code exchange, encrypted token persistence, and a protected manual token refresh route are implemented in code but have not been verified against a real Meta app. Automatic scheduled token refresh, webhook subscription/verification, persistent job queue, Canva OAuth/design/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
+- OAuth authorization-code exchange, encrypted token persistence, and a protected manual token refresh route are implemented in code but have not been verified against a real Meta app. Automatic scheduled token refresh, webhook subscription/verification, persistent job queue, Canva design listing/export, and automatic event processing are not implemented. The `/health` response explicitly reports these implementation gaps; a credential being configured does not mean an integration is connected or verified.
 - Instagram API permissions and endpoint behavior vary by API version and login flow. App review or access approval may be required.
 - Like/unlike automation is not implemented in this starter.
 - Instagram Notes creation and attaching music to Notes are not supported by the standard public API. Do not automate them through private endpoints or browser workarounds.
 - Reels audio/music publishing requires a separately verified, supported Meta audio workflow and suitable licensing. This starter does not attach music to Reels.
 - Message sending is subject to Meta messaging permissions, eligible conversations, and messaging windows. Do not use it for unsolicited bulk messages.
-- Canva credentials alone do not provide an integration; OAuth and the required Connect API scopes/endpoints still need to be implemented.
+- Canva OAuth uses Authorization Code + PKCE and encrypted PostgreSQL token storage in code, but requires a configured Canva developer app and live verification. Design listing/export routes are still not implemented. Canva Connect API access is subject to Canva's app requirements and review.
 - Render free instances may sleep, and local disk may not persist. Use persistent storage and a queue/scheduler for reliable automation.
 
 Never commit API keys, access tokens, or secrets.
+
+
+## Canva OAuth setup
+
+Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`, `DATABASE_URL`, `OAUTH_STATE_SECRET`, and `TOKEN_ENCRYPTION_KEY` in Render. Register the exact HTTPS redirect URI `https://nova-instagram-ai.onrender.com/oauth/canva/callback` in your Canva developer app (or use the exact URI for your own deployment). Run `python -m app.init_oauth_db` to initialize both OAuth state and encrypted token tables, then visit `/oauth/canva/start`. The callback stores tokens server-side and does not return them to the browser. OAuth code is implemented but has not yet been verified with a live Canva app. Canva design listing and export are follow-up work.
