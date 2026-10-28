@@ -3,7 +3,7 @@
 This module never publishes to Instagram. After reviewing the returned temporary
 URL, the user must explicitly call the existing Instagram publishing endpoint.
 """
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -19,16 +19,51 @@ class InstagramDraftExportRequest(BaseModel):
     caption: str = Field(default="", max_length=2200)
 
 
+def _available_format_types(payload: Any) -> set[str]:
+    """Extract export type names from Canva's export-formats response."""
+    found: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            kind = value.get("type")
+            if isinstance(kind, str):
+                found.add(kind.lower())
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(payload)
+    return found
+
+
 @router.post("/instagram-draft-exports")
 async def create_instagram_draft_export(
     body: InstagramDraftExportRequest,
     _: bool = Depends(require_nova_key),
 ):
-    """Start a PNG or MP4 export for review; never publishes automatically."""
+    """Check format support, then start an export for review; never publish."""
     export_format = {"type": "png"} if body.target == "post" else {
         "type": "mp4",
         "quality": "vertical_1080p",
     }
+
+    formats_payload = await _canva_request(
+        "GET", f"designs/{body.design_id}/export-formats"
+    )
+    wanted = export_format["type"]
+    available = _available_format_types(formats_payload)
+    if wanted not in available:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"Canva does not report {wanted.upper()} as an available export format for this design.",
+                "available_formats": sorted(available),
+                "target": body.target,
+            },
+        )
+
     job_payload = await _canva_request(
         "POST",
         "exports",
@@ -38,6 +73,7 @@ async def create_instagram_draft_export(
     return {
         "target": body.target,
         "caption": body.caption,
+        "available_formats_checked": True,
         "export": job_payload,
         "review_required": True,
         "published": False,

@@ -66,3 +66,8 @@ Configure `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA
 The protected `POST /canva/instagram-draft-exports` endpoint starts a Canva PNG export for an Instagram post or an MP4 export (vertical 1080p target) for a Reel. It returns the export job and caption but **does not publish**. Poll `GET /canva/instagram-draft-exports/{job_id}` until the job succeeds; the response then includes temporary preview URLs. Review the actual media and caption yourself before using the existing Instagram publishing endpoint. The Canva URLs expire after 24 hours and should not be stored as permanent assets.
 
 Both routes require `X-NOVA-API-Key` and a connected Canva account. Reel export quality is only a target resolution; Canva preserves the design's aspect ratio, so check the actual dimensions before publishing. Instagram publishing remains a separate explicit action and still requires valid Meta permissions and `INSTAGRAM_AUTOMATION_ENABLED=true`.
+
+
+## Canva export format validation
+
+Before starting an Instagram draft export, NOVA now calls Canva's design export-formats endpoint and checks that the requested PNG or MP4 format is available for that design. If Canva doesn't report the format, NOVA returns a validation error and does not create an export job. This avoids guessing based only on the design's category. The result still requires a manual review; no Instagram content is published by this workflow.
