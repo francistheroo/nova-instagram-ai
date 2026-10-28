@@ -84,3 +84,8 @@ The protected Reel workflow uses Meta's official container process. First call `
 ## Canva MP4 export to Instagram Reel draft
 
 After creating an export with `POST /canva/instagram-draft-exports` using `target: "reel"`, poll its export job until `status=success`. Then call `POST /canva/instagram-reel-drafts/{job_id}` with the caption and `share_to_feed`. NOVA fetches the completed export job from the connected Canva account and creates a Meta Reel container; it does not publish. Check `GET /instagram/reels/drafts/{container_id}` and review the media/caption before using the separate explicit publish endpoint. This bridge requires `X-NOVA-API-Key`, connected Canva and Instagram accounts, and `INSTAGRAM_AUTOMATION_ENABLED=true`. Canva URLs expire after 24 hours, so Meta must fetch the export before it expires. Use this endpoint only with a successful MP4 export created for a Reel.
+
+
+## Direct Canva-to-Instagram Reel publishing
+
+For an explicitly requested direct publish, call `POST /canva/instagram-reels/publish` with `{"design_id":"YOUR_CANVA_DESIGN_ID","caption":"Your caption","share_to_feed":true}` and the `X-NOVA-API-Key` header. NOVA verifies MP4 support, starts a Canva MP4 export, waits for Canva to finish, creates an Instagram Reel container, waits for Meta to report `FINISHED`, then publishes. It is protected by `INSTAGRAM_AUTOMATION_ENABLED=true`; publishing remains disabled by default. If either platform is still processing after the bounded wait, NOVA returns a job/container ID and does not claim it was published. Canva export URLs expire after 24 hours. Live credentials, account permissions, and Render deployment still need real-world verification. This workflow does not attach music.
