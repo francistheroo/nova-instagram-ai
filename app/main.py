@@ -147,6 +147,43 @@ async def health():
     }
 
 
+@app.get("/integrations/status")
+async def integrations_status():
+    """Report environment readiness only; this does not validate live credentials."""
+    env = os.getenv
+    instagram_oauth_configured = all(env(key, "").strip() for key in (
+        "INSTAGRAM_OAUTH_CLIENT_ID", "INSTAGRAM_OAUTH_CLIENT_SECRET",
+        "INSTAGRAM_OAUTH_REDIRECT_URI", "OAUTH_STATE_SECRET", "TOKEN_ENCRYPTION_KEY",
+        "DATABASE_URL",
+    ))
+    canva_oauth_configured = all(env(key, "").strip() for key in (
+        "CANVA_CLIENT_ID", "CANVA_CLIENT_SECRET", "CANVA_REDIRECT_URI",
+        "OAUTH_STATE_SECRET", "TOKEN_ENCRYPTION_KEY", "DATABASE_URL",
+    ))
+    return {
+        "service": "NOVA Instagram AI",
+        "checks_are_configuration_only": True,
+        "live_account_verification": "not_performed",
+        "nova_api_key_configured": bool(env("NOVA_API_KEY", "").strip()),
+        "database_configured": bool(env("DATABASE_URL", "").strip()),
+        "instagram": {
+            "manual_credentials_present": bool(env("INSTAGRAM_ACCESS_TOKEN", "").strip() and env("INSTAGRAM_USER_ID", "").strip()),
+            "oauth_environment_ready": instagram_oauth_configured,
+            "publishing_enabled": env("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
+        },
+        "canva": {
+            "oauth_environment_ready": canva_oauth_configured,
+            "direct_photo_publish_route_implemented": True,
+            "direct_reel_publish_route_implemented": True,
+        },
+        "ai": {
+            "text_provider_configured": bool(env("AI_BASE_URL", "").strip() and env("AI_API_KEY", "").strip() and env("AI_MODEL", "").strip()),
+            "image_provider_configured": bool(env("IMAGE_API_BASE_URL", "").strip() and env("IMAGE_API_KEY", "").strip() and env("IMAGE_MODEL", "").strip()),
+        },
+        "warning": "Configured variables do not prove that credentials are valid, permissions are approved, or external services are connected.",
+    }
+
+
 @app.post("/preview-reply")
 async def preview_reply(body: ReplyRequest):
     """Generate a reply preview. This endpoint does not send anything to Instagram."""
