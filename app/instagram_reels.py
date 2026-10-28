@@ -41,10 +41,10 @@ async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_n
     """Create a Meta video container for review; this endpoint never publishes."""
     if body.video_url.scheme != "https":
         raise HTTPException(status_code=422, detail="video_url must use HTTPS.")
-    from app.main import meta_request
-
     _require_actions_enabled()
-    _, user_id, _ = __import__("app.main", fromlist=["instagram_config"]).instagram_config()
+    from app.main import instagram_config, meta_request
+
+    _, user_id, _ = instagram_config()
     payload = await meta_request(
         "POST",
         f"{user_id}/media",
