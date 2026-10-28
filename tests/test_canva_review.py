@@ -1,5 +1,3 @@
-import asyncio
-
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -86,7 +84,7 @@ def test_canva_draft_export_poll_returns_review_url_not_publish(monkeypatch):
 def test_canva_draft_export_rejects_invalid_job_id(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     response = client.get(
-        "/canva/instagram-draft-exports/bad%2Fjob",
+        "/canva/instagram-draft-exports/bad.job",
         headers={"X-NOVA-API-Key": "test-secret"},
     )
     assert response.status_code == 422
