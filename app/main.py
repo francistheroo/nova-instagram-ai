@@ -9,11 +9,13 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
 from app.instagram_oauth import router as instagram_oauth_router
+from app.canva_oauth import router as canva_oauth_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
 app.include_router(instagram_oauth_router)
+app.include_router(canva_oauth_router)
 
 
 class ReplyRequest(BaseModel):
@@ -128,7 +130,7 @@ async def health():
         "ai_configured": bool(os.getenv("AI_BASE_URL") and os.getenv("AI_API_KEY") and os.getenv("AI_MODEL")),
         "image_generation_configured": bool(os.getenv("IMAGE_API_BASE_URL") and os.getenv("IMAGE_API_KEY") and os.getenv("IMAGE_MODEL")),
         "canva_configured": bool(os.getenv("CANVA_CLIENT_ID") and os.getenv("CANVA_CLIENT_SECRET")),
-        "canva_oauth_implemented": False,
+        "canva_oauth_implemented": True,
         "notes_music_supported": False,
         "instagram_like_actions_supported": False,
     }
@@ -264,11 +266,11 @@ async def generate_image(body: ImageGenerationRequest, _: bool = Depends(require
 
 @app.get("/canva/status")
 async def canva_status():
-    """Credential presence only; Canva OAuth and design/export routes are not implemented yet."""
+    """Report configuration and implementation status without exposing credentials."""
     return {
         "configured": bool(os.getenv("CANVA_CLIENT_ID") and os.getenv("CANVA_CLIENT_SECRET")),
-        "oauth_implemented": False,
+        "oauth_implemented": True,
         "design_listing_implemented": False,
         "export_implemented": False,
-        "message": "Canva credentials alone do not connect an account. OAuth, scopes, and Connect API calls are still required.",
+        "message": "Canva OAuth authorization and encrypted token storage are implemented but need a configured Canva app and live verification. Design listing and export routes are not implemented yet.",
     }
