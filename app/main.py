@@ -10,12 +10,14 @@ from pydantic import BaseModel, Field, HttpUrl
 from app.personality import NOVA_SYSTEM_PROMPT
 from app.instagram_oauth import router as instagram_oauth_router
 from app.canva_oauth import router as canva_oauth_router
+from app.canva_api import router as canva_api_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
 app.include_router(instagram_oauth_router)
 app.include_router(canva_oauth_router)
+app.include_router(canva_api_router)
 
 
 class ReplyRequest(BaseModel):
@@ -270,7 +272,7 @@ async def canva_status():
     return {
         "configured": bool(os.getenv("CANVA_CLIENT_ID") and os.getenv("CANVA_CLIENT_SECRET")),
         "oauth_implemented": True,
-        "design_listing_implemented": False,
-        "export_implemented": False,
-        "message": "Canva OAuth authorization and encrypted token storage are implemented but need a configured Canva app and live verification. Design listing and export routes are not implemented yet.",
+        "design_listing_implemented": True,
+        "export_implemented": True,
+        "message": "Canva OAuth, design listing, export-format lookup, and asynchronous export routes are implemented in code. A configured Canva app and live verification are still required; expired-token refresh is not implemented.",
     }
