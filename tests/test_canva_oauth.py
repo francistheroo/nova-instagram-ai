@@ -18,13 +18,13 @@ def test_canva_oauth_callback_rejects_missing_code_and_state():
     assert response.status_code == 400
 
 
-def test_canva_status_reports_oauth_code_but_not_design_export():
+def test_canva_status_reports_oauth_and_design_export_implementation():
     response = client.get("/canva/status")
     assert response.status_code == 200
     payload = response.json()
     assert payload["oauth_implemented"] is True
-    assert payload["design_listing_implemented"] is False
-    assert payload["export_implemented"] is False
+    assert payload["design_listing_implemented"] is True
+    assert payload["export_implemented"] is True
 
 
 def test_health_reports_canva_oauth_implementation():
