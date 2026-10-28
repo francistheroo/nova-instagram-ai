@@ -29,7 +29,7 @@ def test_health_does_not_claim_instagram_is_connected(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["instagram_configured"] is False
-    assert payload["instagram_oauth_implemented"] is False
+    assert payload["instagram_oauth_implemented"] is True
     assert payload["instagram_token_refresh_implemented"] is False
     assert payload["instagram_webhooks_implemented"] is False
     assert payload["canva_configured"] is False
