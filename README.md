@@ -105,3 +105,15 @@ Call `POST /canva/instagram-posts/publish` with `{"design_id":"YOUR_CANVA_DESIGN
 ## Direct publishing safety and verification status
 
 The direct Canva publishing routes are write actions: `POST /canva/instagram-reels/publish` and `POST /canva/instagram-posts/publish`. Both require the `X-NOVA-API-Key` header, a connected Canva account, valid Instagram authorization and permissions, and `INSTAGRAM_AUTOMATION_ENABLED=true`. Publishing is disabled by default. These endpoints can publish immediately once enabled, so use them only when you intentionally want that exact design and caption posted. Do not test with a real account until you have reviewed the design/caption and confirmed account permissions. Automated tests do not establish that live Canva, Meta, or Render integration works; live verification remains outstanding.
+
+
+## Instagram DM conversation memory (12-hour retention)
+
+NOVA includes a protected PostgreSQL store for short-lived DM context. Each stored message expires 12 hours after it was added; expired rows are excluded from reads and cleaned up during memory reads/writes. The store keeps at most the latest 30 unexpired messages per recipient in each context response. Use:
+- `POST /instagram/dm-memory/messages` with `recipient_id`, `role` (`user` or `assistant`), and `message`.
+- `GET /instagram/dm-memory/{recipient_id}` to retrieve the recent context.
+- `DELETE /instagram/dm-memory/{recipient_id}` to clear a conversation immediately.
+
+All three endpoints require `X-NOVA-API-Key`. Configure `DATABASE_URL` and run `python -m app.init_oauth_db` to create the memory table. Do not put the API key in browser code or logs.
+
+**Important:** this adds the 12-hour storage/retrieval layer only. Automatic ingestion from real Instagram DMs and using this context when NOVA generates/sends replies still require an approved Meta messaging webhook/event flow and integration work. The current implementation does not fetch DMs by itself or send messages. Expiry is enforced when records are accessed or written; a database scheduler can be added later for physical deletion at the exact expiry time.
