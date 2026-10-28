@@ -10,9 +10,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import psycopg
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from psycopg.rows import dict_row
+
+from app.personality import NOVA_SYSTEM_PROMPT
 
 router = APIRouter()
 MEMORY_TTL = timedelta(hours=12)
@@ -53,6 +56,70 @@ def store_dm_message(recipient_id: str, role: str, message: str) -> datetime:
             (recipient_id, role, message, now, now + MEMORY_TTL),
         )
     return now + MEMORY_TTL
+
+
+class DMReplyPreviewRequest(BaseModel):
+    recipient_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    message: str = Field(min_length=1, max_length=4000)
+    language_hint: str | None = Field(default=None, max_length=30)
+
+
+@router.post("/instagram/dm-memory/preview-reply", dependencies=[Depends(_require_nova_key)])
+async def preview_dm_reply(body: DMReplyPreviewRequest):
+    """Generate a review-only reply draft using the last 12 hours of stored context."""
+    now = datetime.now(timezone.utc)
+    try:
+        with _connect() as conn:
+            conn.execute("DELETE FROM nova_instagram_dm_memory WHERE expires_at <= %s", (now,))
+            rows = conn.execute(
+                """SELECT role, message FROM nova_instagram_dm_memory
+                   WHERE recipient_id = %s AND expires_at > %s
+                   ORDER BY created_at DESC LIMIT %s""",
+                (body.recipient_id, now, MAX_MESSAGES_PER_CONVERSATION),
+            ).fetchall()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except psycopg.Error:
+        raise HTTPException(status_code=503, detail="DM memory storage is unavailable. Check PostgreSQL setup.")
+
+    base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("AI_API_KEY", "")
+    model = os.getenv("AI_MODEL", "")
+    if not (base_url and api_key and model):
+        raise HTTPException(status_code=503, detail="AI provider is not configured.")
+    history = list(reversed(rows))
+    messages = [{"role": "system", "content": NOVA_SYSTEM_PROMPT}]
+    for row in history:
+        messages.append({"role": row["role"], "content": row["message"]})
+    # Add the current message only if webhook ingestion hasn't already stored it.
+    if not history or history[-1]["role"] != "user" or history[-1]["message"] != body.message:
+        messages.append({"role": "user", "content": body.message})
+    if body.language_hint:
+        messages.append({"role": "system", "content": f"Language preference hint: {body.language_hint}"})
+
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "messages": messages, "temperature": 0.8},
+            )
+        if response.is_error:
+            raise HTTPException(status_code=502, detail="AI provider request failed.")
+        data = response.json()
+        reply = data["choices"][0]["message"]["content"]
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
+        raise HTTPException(status_code=502, detail="Could not generate a reply draft from the AI provider.")
+    return {
+        "reply": reply,
+        "draft_only": True,
+        "sent_to_instagram": False,
+        "context_messages_used": len(history),
+        "memory_ttl_hours": MEMORY_TTL_HOURS,
+        "review_required": True,
+    }
 
 
 class DMMemoryMessage(BaseModel):
