@@ -3,13 +3,21 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.canva_store import CanvaStoreError, load_latest_canva_tokens
-from app.main_auth import require_nova_key
 
 router = APIRouter(prefix="/canva", tags=["Canva Connect API"])
+
+
+def require_nova_key(x_nova_api_key: str | None = Header(default=None)):
+    expected = os.getenv("NOVA_API_KEY", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Set NOVA_API_KEY in server environment before using Canva action endpoints.")
+    if not x_nova_api_key or x_nova_api_key != expected:
+        raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
+    return True
 
 
 class CanvaExportRequest(BaseModel):
