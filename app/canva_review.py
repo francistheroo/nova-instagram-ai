@@ -1,7 +1,7 @@
-"""Canva-to-Instagram export helper that stops at a human review gate.
+"""Canva-to-Instagram export helper with a deliberate review gate.
 
-This module never publishes to Instagram. After reviewing the returned temporary
-URL, the user must explicitly call the existing Instagram publishing endpoint.
+Exports are temporary. This module can create an Instagram Reel container from a
+successful Canva MP4 export, but never publishes it.
 """
 from typing import Any, Literal
 
@@ -17,6 +17,11 @@ class InstagramDraftExportRequest(BaseModel):
     design_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_-]+$")
     target: Literal["post", "reel"] = "post"
     caption: str = Field(default="", max_length=2200)
+
+
+class CreateInstagramReelFromExportRequest(BaseModel):
+    caption: str = Field(default="", max_length=2200)
+    share_to_feed: bool = True
 
 
 def _available_format_types(payload: Any) -> set[str]:
@@ -36,6 +41,12 @@ def _available_format_types(payload: Any) -> set[str]:
 
     visit(payload)
     return found
+
+
+def _valid_job_id(job_id: str) -> bool:
+    return bool(job_id) and len(job_id) <= 200 and all(
+        ch.isalnum() or ch in "_-" for ch in job_id
+    )
 
 
 @router.post("/instagram-draft-exports")
@@ -79,7 +90,7 @@ async def create_instagram_draft_export(
         "published": False,
         "next_step": (
             f"Poll GET /canva/instagram-draft-exports/{job.get('id', '<job_id>')}; "
-            "inspect the export URL and approve it yourself before calling an Instagram publishing endpoint."
+            "review the export before using the separate Reel-draft creation endpoint."
         ),
     }
 
@@ -90,7 +101,7 @@ async def get_instagram_draft_export(
     _: bool = Depends(require_nova_key),
 ):
     """Poll Canva and return a temporary URL for manual review, not publication."""
-    if not job_id or len(job_id) > 200 or not all(ch.isalnum() or ch in "_-" for ch in job_id):
+    if not _valid_job_id(job_id):
         raise HTTPException(status_code=422, detail="Invalid Canva export job ID.")
     payload = await _canva_request("GET", f"exports/{job_id}")
     job = payload.get("job", {})
@@ -104,4 +115,72 @@ async def get_instagram_draft_export(
         "published": False,
         "warning": "Canva export URLs expire after 24 hours. Review the media and caption before manually approving publication.",
         "error": job.get("error") if status == "failed" else None,
+    }
+
+
+@router.post("/instagram-reel-drafts/{job_id}")
+async def create_instagram_reel_draft_from_canva_export(
+    job_id: str,
+    body: CreateInstagramReelFromExportRequest,
+    _: bool = Depends(require_nova_key),
+):
+    """Turn a completed Canva MP4 export into an Instagram Reel container, never publish."""
+    if not _valid_job_id(job_id):
+        raise HTTPException(status_code=422, detail="Invalid Canva export job ID.")
+
+    export_payload = await _canva_request("GET", f"exports/{job_id}")
+    job = export_payload.get("job", {})
+    if job.get("status") != "success":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Canva export is not ready. Wait for a successful MP4 export.",
+                "status": job.get("status"),
+            },
+        )
+
+    urls = job.get("urls", [])
+    video_url = next(
+        (url for url in urls if isinstance(url, str) and url.startswith("https://")),
+        None,
+    ) if isinstance(urls, list) else None
+    if not video_url:
+        raise HTTPException(
+            status_code=502,
+            detail="Canva did not return a usable HTTPS export URL.",
+        )
+
+    import os
+    from app.main import instagram_config, meta_request
+
+    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
+        raise HTTPException(
+            status_code=403,
+            detail="Instagram actions are disabled. Enable only after testing and authorization.",
+        )
+    _, user_id, _ = instagram_config()
+    container = await meta_request(
+        "POST",
+        f"{user_id}/media",
+        data={
+            "media_type": "REELS",
+            "video_url": video_url,
+            "caption": body.caption,
+            "share_to_feed": "true" if body.share_to_feed else "false",
+        },
+    )
+    container_id = container.get("id")
+    if not container_id:
+        raise HTTPException(
+            status_code=502,
+            detail={"message": "Meta did not return a Reel container ID.", "response": container},
+        )
+    return {
+        "canva_export_job_id": job_id,
+        "container_id": container_id,
+        "status": "created",
+        "published": False,
+        "review_required": True,
+        "warning": "The Canva export URL expires after 24 hours. Meta must fetch it before expiry. Review the Reel and caption; publish separately only after Meta reports FINISHED.",
+        "next_step": f"GET /instagram/reels/drafts/{container_id} to check processing. Publication is a separate explicit action.",
     }
