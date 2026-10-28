@@ -13,7 +13,7 @@ import httpx
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 
-from app.dm_memory import store_dm_message, generate_dm_reply
+from app.dm_memory import store_dm_message, generate_dm_reply, claim_dm_event, finish_dm_event
 from app.oauth_store import load_latest_instagram_token
 
 router = APIRouter(prefix="/webhooks/instagram", tags=["Instagram webhook"])
@@ -73,19 +73,31 @@ async def receive_instagram_webhook(
                 text = message.get("text")
                 message_id = message.get("mid")
                 if isinstance(sender_id, str) and isinstance(text, str) and text.strip():
-                    # Meta may retry the same event. Use its stable message ID as a
-                    # unique key; duplicate IDs are acknowledged without another reply.
+                    # Auto-reply events with Meta IDs use a separate processing
+                    # lease. This lets a retryable failure be reclaimed without
+                    # sending two concurrent replies.
+                    auto_replies_enabled = os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true"
+                    event_id = message_id if isinstance(message_id, str) and message_id else None
+                    event_claimed = False
+                    if auto_replies_enabled and event_id:
+                        event_claimed = claim_dm_event(event_id)
+                        if not event_claimed:
+                            skipped += 1
+                            continue
+
+                    # Preserve message-level deduplication in conversation memory.
                     stored_until = store_dm_message(
                         sender_id, "user", text.strip(),
-                        message_id=message_id if isinstance(message_id, str) and message_id else None,
+                        message_id=event_id,
                     )
-                    if stored_until is None:
+                    if stored_until is None and not event_claimed:
                         skipped += 1
                         continue
-                    stored += 1
+                    if stored_until is not None:
+                        stored += 1
 
                     # Automatic replies are opt-in and remain off by default.
-                    if os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() != "true":
+                    if not auto_replies_enabled:
                         skipped += 1
                         continue
 
@@ -98,12 +110,16 @@ async def receive_instagram_webhook(
                     event_time = datetime.fromtimestamp(event_timestamp / 1000, tz=timezone.utc)
                     age_seconds = (datetime.now(timezone.utc) - event_time).total_seconds()
                     if age_seconds < -300 or age_seconds > 24 * 60 * 60:
+                        if event_claimed:
+                            finish_dm_event(event_id, "ignored")
                         skipped += 1
                         continue
 
                     try:
                         reply_text = (await generate_dm_reply(sender_id, text.strip())).strip()
                         if not reply_text:
+                            if event_claimed:
+                                finish_dm_event(event_id, "retryable")
                             skipped += 1
                             continue
                         manual_token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip()
@@ -114,11 +130,15 @@ async def receive_instagram_webhook(
                             if stored_token:
                                 expiry = stored_token.get("expires_at")
                                 if expiry is not None and expiry <= datetime.now(timezone.utc):
+                                    if event_claimed:
+                                        finish_dm_event(event_id, "ignored")
                                     skipped += 1
                                     continue
                                 token = stored_token["access_token"]
                                 user_id = user_id or stored_token["instagram_user_id"]
                         if not token or not user_id:
+                            if event_claimed:
+                                finish_dm_event(event_id, "retryable")
                             skipped += 1
                             continue
 
@@ -135,12 +155,21 @@ async def receive_instagram_webhook(
                             )
                         if response.is_success:
                             store_dm_message(sender_id, "assistant", reply_text)
+                            if event_claimed:
+                                finish_dm_event(event_id, "sent")
                             sent += 1
                         else:
+                            if event_claimed:
+                                finish_dm_event(event_id, "retryable")
                             skipped += 1
                     except Exception:
-                        # A failed reply does not fail webhook delivery; Meta retries
-                        # could otherwise cause duplicate replies for the same event.
+                        # Release a failed event for a later retry. The lease still
+                        # prevents concurrent workers from claiming it immediately.
+                        if event_claimed:
+                            try:
+                                finish_dm_event(event_id, "retryable")
+                            except Exception:
+                                pass
                         skipped += 1
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
