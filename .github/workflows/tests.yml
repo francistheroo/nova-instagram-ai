@@ -34,6 +34,5 @@ jobs:
           INSTAGRAM_USER_ID: ""
           INSTAGRAM_AUTOMATION_ENABLED: "false"
           NOVA_API_KEY: ""
-        env:
           PYTHONPATH: ${{ github.workspace }}
         run: python -m pytest -q
