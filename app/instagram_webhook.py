@@ -63,14 +63,25 @@ async def receive_instagram_webhook(
         for entry in payload.get("entry", []) if isinstance(payload, dict) else []:
             events = entry.get("messaging", []) if isinstance(entry, dict) else []
             for event in events:
-                if not isinstance(event, dict) or event.get("message", {}).get("is_echo"):
+                if not isinstance(event, dict):
                     continue
                 sender = event.get("sender", {})
                 message = event.get("message", {})
+                if not isinstance(message, dict) or message.get("is_echo"):
+                    continue
                 sender_id = sender.get("id") if isinstance(sender, dict) else None
-                text = message.get("text") if isinstance(message, dict) else None
+                text = message.get("text")
+                message_id = message.get("mid")
                 if isinstance(sender_id, str) and isinstance(text, str) and text.strip():
-                    store_dm_message(sender_id, "user", text.strip())
+                    # Meta may retry the same event. Use its stable message ID as a
+                    # unique key; duplicate IDs are acknowledged without another reply.
+                    stored_until = store_dm_message(
+                        sender_id, "user", text.strip(),
+                        message_id=message_id if isinstance(message_id, str) and message_id else None,
+                    )
+                    if stored_until is None:
+                        skipped += 1
+                        continue
                     stored += 1
 
                     # Automatic replies are opt-in and remain off by default.
