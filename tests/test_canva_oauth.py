@@ -205,3 +205,125 @@ def test_canva_callback_rejects_replayed_persisted_state_before_exchange(monkeyp
 def test_canva_callback_rejects_oversized_query_values(parameter, value):
     response = client.get("/oauth/canva/callback", params={parameter: value})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "token_payload",
+    [
+        None,
+        [],
+        "unexpected",
+        {},
+        {"access_token": []},
+        {"access_token": "canva-token", "expires_in": "3600"},
+        {"access_token": "canva-token", "expires_in": True},
+        {"access_token": "canva-token", "expires_in": float("nan")},
+        {"access_token": "canva-token", "expires_in": 10**100},
+    ],
+)
+def test_canva_callback_rejects_malformed_token_payload(monkeypatch, token_payload):
+    from app import canva_oauth
+    from app.oauth_security import create_oauth_state, validate_oauth_state
+
+    monkeypatch.setenv("CANVA_CLIENT_ID", "test-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    monkeypatch.setenv("OAUTH_STATE_SECRET", "s" * 48)
+    state = create_oauth_state()
+    nonce = validate_oauth_state(state)["nonce"]
+    monkeypatch.setattr(canva_oauth, "consume_oauth_state", lambda value: value == nonce)
+    monkeypatch.setattr(
+        canva_oauth,
+        "save_canva_tokens",
+        lambda *args, **kwargs: pytest.fail("Malformed token response must not be stored"),
+    )
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return token_payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/canva/callback",
+        params={"code": "fake-canva-code", "state": state},
+        cookies={
+            "nova_canva_oauth_state": state,
+            "nova_canva_pkce_verifier": "test-pkce-verifier",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 502
+    assert "canva-token" not in response.text
+    assert "test-client-secret" not in response.text
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        None,
+        [],
+        "unexpected",
+        {},
+        {"access_token": [], "refresh_token": "new-refresh"},
+        {"access_token": "new-access", "refresh_token": []},
+        {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": "3600"},
+        {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": float("inf")},
+    ],
+)
+def test_canva_refresh_rejects_malformed_provider_response(monkeypatch, replacement):
+    from app import canva_oauth
+
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("CANVA_CLIENT_ID", "test-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    monkeypatch.setattr(
+        canva_oauth,
+        "load_latest_canva_tokens",
+        lambda: {
+            "user_id": "canva-user",
+            "access_token": "old-access",
+            "refresh_token": "old-refresh",
+        },
+    )
+    monkeypatch.setattr(
+        canva_oauth,
+        "save_canva_tokens",
+        lambda *args, **kwargs: pytest.fail("Malformed replacement token must not be stored"),
+    )
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return replacement
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "test-secret"})
+
+    assert response.status_code == 502
+    assert "old-refresh" not in response.text
+    assert "test-client-secret" not in response.text
