@@ -233,3 +233,57 @@ def test_webhook_ignores_nonfinite_timestamp_without_crashing(monkeypatch, times
     assert response.json()["automatic_replies_sent"] == 0
     assert response.json()["automatic_replies_skipped"] == 1
     assert finished == [("nonfinite-timestamp-mid", "ignored")]
+
+
+def test_webhook_rejects_missing_signature(monkeypatch):
+    monkeypatch.setenv("META_APP_SECRET", "test-app-secret")
+    response = client.post("/webhooks/instagram", content=b'{"entry":[]}')
+    assert response.status_code == 401
+
+
+def test_webhook_missing_app_secret_returns_service_unavailable(monkeypatch):
+    monkeypatch.delenv("META_APP_SECRET", raising=False)
+    response = client.post(
+        "/webhooks/instagram",
+        content=b'{"entry":[]}',
+        headers={"X-Hub-Signature-256": "sha256=anything"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "META_APP_SECRET is not configured."
+
+
+def test_webhook_verification_rejects_wrong_token(monkeypatch):
+    monkeypatch.setenv("INSTAGRAM_WEBHOOK_VERIFY_TOKEN", "expected-token")
+    response = client.get(
+        "/webhooks/instagram",
+        params={"hub.mode": "subscribe", "hub.verify_token": "wrong-token", "hub.challenge": "12345"},
+    )
+    assert response.status_code == 403
+
+
+def test_webhook_verification_rejects_missing_challenge(monkeypatch):
+    monkeypatch.setenv("INSTAGRAM_WEBHOOK_VERIFY_TOKEN", "verify-me")
+    response = client.get(
+        "/webhooks/instagram",
+        params={"hub.mode": "subscribe", "hub.verify_token": "verify-me"},
+    )
+    assert response.status_code == 403
+
+
+def test_webhook_ignores_empty_text_without_storing(monkeypatch):
+    monkeypatch.setenv("META_APP_SECRET", "test-app-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setattr(
+        webhook,
+        "store_dm_message",
+        lambda *_args, **_kwargs: pytest.fail("Empty message text must not be stored"),
+    )
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{
+            "sender": {"id": "12345"},
+            "message": {"mid": "empty-text-mid", "text": "   "},
+        }]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+    assert response.json()["automatic_replies_sent"] == 0
