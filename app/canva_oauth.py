@@ -14,7 +14,13 @@ from fastapi.responses import RedirectResponse
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
 from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import OAuthStoreError, consume_oauth_state, save_oauth_state
-from app.canva_store import CanvaStoreError, load_latest_canva_tokens, save_canva_tokens
+from app.canva_store import (
+    CanvaStoreError,
+    CanvaRefreshInProgress,
+    canva_refresh_lock,
+    load_latest_canva_tokens,
+    save_canva_tokens,
+)
 
 router = APIRouter(prefix="/oauth/canva", tags=["Canva OAuth"])
 
@@ -130,8 +136,25 @@ async def canva_oauth_callback(
 
 @router.post("/refresh")
 async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
-    """Rotate a Canva refresh token and store the replacement credentials encrypted."""
+    """Refresh Canva tokens under a cross-worker PostgreSQL lock."""
     client_id, client_secret, _ = _config()
+    try:
+        with canva_refresh_lock():
+            return await _refresh_canva_tokens_locked(client_id, client_secret)
+    except CanvaRefreshInProgress:
+        raise HTTPException(
+            status_code=409,
+            detail="A Canva token refresh is already in progress. Retry after it finishes.",
+        ) from None
+    except (CanvaStoreError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Canva refresh storage is unavailable. Try again after database connectivity is restored.",
+        ) from None
+
+
+async def _refresh_canva_tokens_locked(client_id: str, client_secret: str):
+    """Perform token rotation while the shared database lock is held."""
     try:
         current = load_latest_canva_tokens()
     except (CanvaStoreError, OAuthSecurityError, psycopg.Error):
@@ -183,7 +206,6 @@ async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
                 detail="Canva did not return a complete replacement token bundle. Reconnect Canva if the current refresh token no longer works.",
             )
 
-        # Keep the existing account key if Canva omits user_id from refresh responses.
         if user_id and not replacement.get("user_id"):
             replacement["user_id"] = user_id
         expires_at = token_expiry_from_seconds(replacement.get("expires_in"))
