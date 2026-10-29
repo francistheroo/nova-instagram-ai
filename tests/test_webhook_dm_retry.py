@@ -158,3 +158,58 @@ def test_meta_send_failure_can_retry_same_message(monkeypatch):
         ("mid.retry.1", "retryable"),
         ("mid.retry.1", "sent"),
     ]
+
+
+def test_accepted_reply_is_not_retried_when_assistant_history_write_fails(monkeypatch):
+    """A post-send history failure must not turn an accepted reply into a retry."""
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "test-token")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "ig-user-1")
+
+    finishes = []
+    store_calls = []
+
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda message_id: True)
+    monkeypatch.setattr(
+        webhook,
+        "finish_dm_event",
+        lambda message_id, status: finishes.append((message_id, status)),
+    )
+
+    def store(recipient_id, role, message, message_id=None):
+        store_calls.append((recipient_id, role, message, message_id))
+        if role == "assistant":
+            raise RuntimeError("simulated history storage outage")
+        return "stored"
+
+    monkeypatch.setattr(webhook, "store_dm_message", store)
+
+    async def generate(*args):
+        return "Hello! How can I help?"
+
+    monkeypatch.setattr(webhook, "generate_dm_reply", generate)
+
+    class Response:
+        is_success = True
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(webhook.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+
+    response = post_event(secret)
+
+    assert response.status_code == 200
+    assert response.json()["automatic_replies_sent"] == 1
+    assert response.json()["automatic_replies_skipped"] == 0
+    assert finishes == [("mid.retry.1", "sent")]
+    assert [call[1] for call in store_calls] == ["user", "assistant"]

@@ -46,6 +46,10 @@ def store_dm_message(recipient_id: str, role: str, message: str, message_id: str
         raise ValueError("invalid recipient ID")
     if not message or len(message) > 4000:
         raise ValueError("message must contain 1–4000 characters")
+    if message_id is not None and (
+        not isinstance(message_id, str) or not message_id or len(message_id) > 512
+    ):
+        raise ValueError("invalid Meta message ID")
     now = datetime.now(timezone.utc)
     with _connect() as conn:
         conn.execute("DELETE FROM nova_instagram_dm_memory WHERE expires_at <= %s", (now,))
@@ -78,7 +82,7 @@ async def generate_dm_reply(recipient_id: str, current_message: str) -> str:
         rows = conn.execute(
             """SELECT role, message FROM nova_instagram_dm_memory
                WHERE recipient_id = %s AND expires_at > %s
-               ORDER BY created_at DESC LIMIT %s""",
+               ORDER BY created_at DESC, id DESC LIMIT %s""",
             (recipient_id, now, MAX_MESSAGES_PER_CONVERSATION),
         ).fetchall()
     base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
@@ -265,7 +269,7 @@ def claim_dm_event(message_id: str) -> bool:
     A fresh event can be claimed once. Retryable events and abandoned processing
     leases can be reclaimed; already-sent events cannot.
     """
-    if not message_id or len(message_id) > 512:
+    if not isinstance(message_id, str) or not message_id or len(message_id) > 512:
         raise ValueError("invalid Meta message ID")
     now = datetime.now(timezone.utc)
     lease_until = now + DM_EVENT_LEASE
@@ -290,6 +294,8 @@ def claim_dm_event(message_id: str) -> bool:
 
 def finish_dm_event(message_id: str, status: Literal["sent", "retryable", "ignored"]) -> None:
     """Record a reply outcome; retryable failures may be claimed again."""
+    if not isinstance(message_id, str) or not message_id or len(message_id) > 512:
+        raise ValueError("invalid Meta message ID")
     if status not in ("sent", "retryable", "ignored"):
         raise ValueError("status must be sent, retryable, or ignored")
     now = datetime.now(timezone.utc)

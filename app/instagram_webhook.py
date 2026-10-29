@@ -187,9 +187,17 @@ async def receive_instagram_webhook(
                             },
                         )
                     if response.is_success:
-                        store_dm_message(sender_id, "assistant", reply_text)
+                        # Meta accepted the reply. Record the terminal state before
+                        # writing optional assistant history so a history-store outage
+                        # cannot turn an already-sent reply into a retry and duplicate.
                         finish_dm_event(message_id, "sent")
                         sent += 1
+                        try:
+                            store_dm_message(sender_id, "assistant", reply_text)
+                        except Exception:
+                            # The delivery already succeeded; missing this history turn
+                            # is preferable to asking Meta to redeliver and sending twice.
+                            pass
                     else:
                         finish_dm_event(message_id, "retryable")
                         retry_requested = True
