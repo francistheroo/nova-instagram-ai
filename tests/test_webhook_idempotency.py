@@ -131,8 +131,8 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
 
     with TestClient(app) as client:
         first = deliver()
-        assert first.status_code == 200
-        assert first.json()["automatic_replies_sent"] == 0
+        assert first.status_code == 503
+        assert "retryable" in first.json()["detail"]
         assert finishes == [("mid.retry.1", "retryable")]
 
         second = deliver()
