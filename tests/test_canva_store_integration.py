@@ -202,3 +202,25 @@ def test_legacy_single_account_row_remains_readable(canva_db):
     assert loaded is not None
     assert loaded["access_token"] == "legacy-access"
     assert loaded["expires_at"] is None
+
+
+def test_token_bundle_is_encrypted_at_rest(canva_db):
+    account_key = "canva-encrypted-at-rest-" + secrets.token_urlsafe(8)
+    plaintext_access = "plaintext-access-" + secrets.token_urlsafe(16)
+    plaintext_refresh = "plaintext-refresh-" + secrets.token_urlsafe(16)
+    canva_store.save_canva_tokens(
+        _bundle(account_key, plaintext_access, plaintext_refresh),
+        expires_at=None,
+    )
+
+    with psycopg.connect(canva_db["url"]) as conn:
+        row = conn.execute(
+            "SELECT account_key, encrypted_token_bundle FROM nova_canva_tokens WHERE account_key = %s",
+            (account_key,),
+        ).fetchone()
+
+    assert row is not None
+    assert row[0] == account_key
+    assert plaintext_access not in row[1]
+    assert plaintext_refresh not in row[1]
+    assert row[1] != json.dumps(_bundle(account_key, plaintext_access, plaintext_refresh))
