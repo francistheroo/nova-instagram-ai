@@ -122,11 +122,18 @@ async def canva_oauth_callback(
         if not isinstance(access_token, str) or not access_token.strip():
             raise HTTPException(status_code=502, detail="Canva did not return an access token.")
         expires_at = token_expiry_from_seconds(token_payload.get("expires_in"))
-        save_canva_tokens(token_payload, expires_at=expires_at)
     except HTTPException:
         raise
-    except (httpx.HTTPError, ValueError, TypeError, CanvaStoreError, OAuthStoreError, OAuthSecurityError):
-        raise HTTPException(status_code=502, detail="Canva connection could not be saved. Check server configuration without logging credentials.") from None
+    except (httpx.HTTPError, ValueError, TypeError):
+        raise HTTPException(status_code=502, detail="Canva token exchange could not be completed. Check the provider configuration without logging credentials.") from None
+
+    try:
+        save_canva_tokens(token_payload, expires_at=expires_at)
+    except (CanvaStoreError, OAuthStoreError, OAuthSecurityError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Canva issued tokens but NOVA could not store them securely. Restore database and encryption-key configuration, then restart the Canva connection flow; do not retry this authorization code.",
+        ) from None
 
     response = RedirectResponse("/?canva_connected=pending_verification", status_code=303)
     response.delete_cookie("nova_canva_oauth_state", path="/oauth/canva")
