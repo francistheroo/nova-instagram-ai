@@ -249,6 +249,16 @@ async def preview_reply(body: ReplyRequest):
     return {"reply": reply, "mode": "ai", "sent_to_instagram": False}
 
 
+@app.get("/instagram/verify")
+async def verify_instagram_connection(_: bool = Depends(require_nova_key)):
+    """Verify configured credentials against Meta and return the authorized profile identity."""
+    _, user_id, _ = instagram_config()
+    profile = await meta_request("GET", user_id, params={"fields": "id,username"})
+    if not isinstance(profile, dict) or not profile.get("id"):
+        raise HTTPException(status_code=502, detail="Meta did not return a valid Instagram profile response.")
+    return {"connected": True, "profile_id": str(profile["id"]), "username": profile.get("username")}
+
+
 @app.get("/instagram/media")
 async def list_instagram_media(_: bool = Depends(require_nova_key)):
     """List media available to the authorized Instagram professional account."""
