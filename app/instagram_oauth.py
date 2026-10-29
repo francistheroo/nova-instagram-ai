@@ -57,7 +57,7 @@ async def instagram_oauth_start():
         payload = validate_oauth_state(state)
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=STATE_MAX_AGE_SECONDS)
         save_oauth_state(payload["nonce"], expires_at=expires_at)
-    except (OAuthSecurityError, OAuthStoreError):
+    except (OAuthSecurityError, OAuthStoreError, psycopg.Error):
         raise HTTPException(
             status_code=503,
             detail="OAuth security or database storage is not configured correctly.",
@@ -112,7 +112,7 @@ async def instagram_oauth_callback(
             raise OAuthSecurityError("OAuth state was already used or expired.")
     except OAuthSecurityError:
         raise HTTPException(status_code=400, detail="Instagram OAuth state is invalid, expired, or already used.") from None
-    except OAuthStoreError:
+    except (OAuthStoreError, psycopg.Error):
         raise HTTPException(status_code=503, detail="Instagram OAuth state storage is unavailable. Retry after database connectivity is restored.") from None
 
     # OAuth code exchange is performed only on the server; never return tokens to the browser.
