@@ -103,7 +103,8 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
     monkeypatch.setattr(webhook, "finish_dm_event", finish)
     monkeypatch.setattr(webhook, "store_dm_message", store)
     monkeypatch.setattr(webhook, "generate_dm_reply", generate)
-    monkeypatch.setattr(webhook.httpx, "AsyncClient", FakeAsyncClient)
+    from types import SimpleNamespace
+    monkeypatch.setattr(webhook, "httpx", SimpleNamespace(AsyncClient=FakeAsyncClient))
 
     payload = {
         "object": "instagram",
