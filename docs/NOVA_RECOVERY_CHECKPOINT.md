@@ -1,5 +1,6 @@
 # NOVA Instagram AI — Recovery Checkpoint
-Updated: 2026-10-29 (verified against GitHub main)
+
+Updated: 2026-10-29 (verified against GitHub)
 
 ## Project
 - Repository: https://github.com/francistheroo/nova-instagram-ai
@@ -15,38 +16,36 @@ Updated: 2026-10-29 (verified against GitHub main)
 - Instagram Notes/music and standard auto-like/follow/follow-back are not supported through the standard public API. DM access depends on permissions and conversation eligibility.
 - Never claim live Meta behavior works unless verified.
 
-## Existing milestones (verify before relying on them)
-- PRs #1–#27 cover FastAPI starter, CI, OAuth, Canva, guarded publishing, status, AI caption drafts/content ideas, and Content Studio.
+## Verified repository milestones
+- PRs #1–#27: FastAPI starter, CI, OAuth, Canva, guarded publishing, status, AI caption drafts/content ideas, and Content Studio.
 - PR #29: webhook ingestion and 12-hour DM memory.
 - PR #30: opt-in DM auto-replies within the standard 24-hour messaging window; default off.
 - PRs #31/#32: duplicate message-memory protection and tests.
-- PR #34 was merged on 2026-10-28. Its merged commit is `b77850006b0e4f3b9b55a8edf5ffc24148b0ae3d`. It added the database-backed retry-state helper foundation to `app/dm_memory.py`, but it did NOT integrate those helpers into the webhook. The merged PR's own description explicitly says integration remains unfinished.
-- Verified current `main`: `app/dm_memory.py` has `claim_dm_event` and `finish_dm_event`; `app/instagram_webhook.py` still imports only `store_dm_message` and `generate_dm_reply` and does not use the event-state helpers.
-- The event-state schema on main allows only `processing`, `sent`, and `retryable`; it does not include `ignored`. Do not assume the newer unmerged draft integration code is on main.
-- Latest check for PR #34's merged head workflow lookup returned no workflow runs; earlier helper-only CI was reported successful, but it does not validate webhook integration.
-- Open tracking issue #33: https://github.com/francistheroo/nova-instagram-ai/issues/33
+- PR #34: PostgreSQL-backed DM retry-state helper foundation.
+- PR #35: integrates retry-state handling into the webhook.
+- PR #36: regression coverage for Meta send-failure retry.
+- PR #37: stale/out-of-window DM test.
+- PR #38: expired processing lease recovery tests.
+- PR #40: duplicate webhook delivery test when auto-replies are disabled.
+- PR #41: missing stable Meta message ID test; merged.
+- PR #42: invalid webhook signature and echo-event safety tests; merged. The associated GitHub Actions run #85 reported success.
+- PR #42 merge commit: `52ab33d45f1c3f219b18b9446ae56a243e442726`.
 
-## Current next work — draft PR #35
-- URL: https://github.com/francistheroo/nova-instagram-ai/pull/35
-- Branch: `feature/webhook-dm-retries`
-- Head commit: `51bec9e05e5a5248b4a64f2c846cc9a3f4b5299d`
-- Open draft, not merged/deployed. Initial CI lookup returned no workflow runs yet; check again before claiming tests passed.
-- Current branch changes integrate claim/finish state in the webhook, add `ignored` as a terminal state with a DB constraint migration, and add a regression test for retry after AI failure even when the inbound message is already stored.
-- Duplicate idempotency test now mocks claim rejection. More tests are still needed.
+## DM webhook behavior to remember
+- Incoming text messages are verified using `X-Hub-Signature-256` and `META_APP_SECRET`.
+- Echo messages are ignored.
+- Stable Meta `message.mid` is required for automatic replies and safe retry claims. Messages without a stable ID may be stored but must not trigger AI replies.
+- Duplicate inbound message IDs are protected by database uniqueness.
+- Retry state is tracked separately from conversation memory; transient AI/Meta failures can be retried on a later webhook delivery.
+- Replies are opt-in and must remain disabled unless the user explicitly authorizes enabling live behavior and the required Meta permissions/configuration are verified.
+- A timeout after Meta accepts a send but before NOVA receives the response can still cause a duplicate on retry; public APIs do not provide a general idempotency key for this send.
+- Mocked tests do not prove production PostgreSQL concurrency or live Meta behavior.
 
-## Remaining work for PR #35
-1. Check the latest workflow run for exact head SHA and fix failures; no CI pass is confirmed yet.
-2. Review and expand retry tests for Meta API failure, successful send, expired lease reclaim, duplicate/concurrent delivery, out-of-window and invalid timestamps, and missing IDs.
-3. Integrate `claim_dm_event` / `finish_dm_event` carefully:
-   - Claim before processing messages that have a Meta `mid`.
-   - Handle a retryable event whose user message is already in DM memory; don't let memory dedup block retry.
-   - Mark successful Meta sends `sent`.
-   - Mark transient AI/Meta failures `retryable`.
-   - Mark out-of-window or invalid-timestamp events terminal only after adding a supported terminal status/schema migration, or leave them retryable with a deliberate documented policy.
-   - Handle missing message IDs safely and keep auto-replies opt-in.
-   - Consider database failures and send timeouts; exactly-once delivery cannot be guaranteed if Meta accepts a send but the response is lost.
-4. Mock tests are not proof of real PostgreSQL concurrency; add database-backed tests if the project has a safe test database.
-5. Keep PR #35 draft until tests and schema are reviewed. Do not merge or deploy without user authorization.
+## Recommended next engineering work
+1. Add safe PostgreSQL-backed tests for retry-state transitions and concurrent claims, using a dedicated test database only.
+2. Review webhook error handling for malformed payloads and database outages; add focused regression tests together in one PR.
+3. Verify current GitHub Actions results by exact commit SHA before reporting CI as passed.
+4. Keep PRs draft until tests and schema are reviewed. Do not merge or deploy without user authorization.
 
-## User workflow
-The user often says “Next” to request the next incremental step. Make actual repository progress and report exact state; avoid generic advice. If a new chat starts, verify GitHub before trusting this checkpoint.
+## Workflow
+The user often says “Next” to request another incremental step. Make real repository progress, combine closely related changes in one PR, and report exact verified status. Recheck GitHub before relying on this checkpoint in a future chat.
