@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 from typing import Any
@@ -42,20 +43,46 @@ def create_oauth_state(*, now: int | None = None) -> str:
 
 
 def validate_oauth_state(state: str, *, max_age_seconds: int = 600, now: int | None = None) -> dict[str, Any]:
-    """Validate signature and age. Caller must additionally enforce one-time use."""
-    if not state or len(state) > 2048 or state.count(".") != 1:
+    """Validate canonical URL-safe encoding, signature, and age.
+
+    Callers must additionally bind the state to the browser session and enforce
+    one-time use in durable shared storage.
+    """
+    if not isinstance(state, str) or not state or len(state) > 2048 or state.count(".") != 1:
         raise OAuthSecurityError("Invalid OAuth state format.")
-    encoded, supplied_signature = state.encode("ascii", errors="ignore").split(b".", 1)
+    try:
+        raw_state = state.encode("ascii")
+    except UnicodeEncodeError:
+        raise OAuthSecurityError("Invalid OAuth state format.") from None
+
+    encoded, supplied_signature = raw_state.split(b".", 1)
+    if (
+        not encoded
+        or not supplied_signature
+        or re.fullmatch(rb"[A-Za-z0-9_-]+", encoded) is None
+        or re.fullmatch(rb"[A-Za-z0-9_-]+", supplied_signature) is None
+    ):
+        raise OAuthSecurityError("Invalid OAuth state format.")
+
     expected = hmac.new(_state_secret(), encoded, hashlib.sha256).digest()
     try:
         supplied = base64.urlsafe_b64decode(supplied_signature + b"=" * (-len(supplied_signature) % 4))
         payload_bytes = base64.urlsafe_b64decode(encoded + b"=" * (-len(encoded) % 4))
+        # Reject alternate/non-canonical encodings instead of allowing the
+        # permissive base64 decoder to silently ignore extra characters.
+        if base64.urlsafe_b64encode(supplied).rstrip(b"=") != supplied_signature:
+            raise OAuthSecurityError("Invalid OAuth state signature encoding.")
+        if base64.urlsafe_b64encode(payload_bytes).rstrip(b"=") != encoded:
+            raise OAuthSecurityError("Invalid OAuth state payload encoding.")
         payload = json.loads(payload_bytes)
-    except (ValueError, json.JSONDecodeError):
+    except OAuthSecurityError:
+        raise
+    except (ValueError, UnicodeDecodeError):
         raise OAuthSecurityError("Invalid OAuth state payload.") from None
+
     if not hmac.compare_digest(expected, supplied):
         raise OAuthSecurityError("Invalid OAuth state signature.")
-    if not isinstance(payload, dict) or not isinstance(payload.get("iat"), int):
+    if not isinstance(payload, dict) or type(payload.get("iat")) is not int:
         raise OAuthSecurityError("Invalid OAuth state payload.")
     current = int(time.time() if now is None else now)
     age = current - payload["iat"]
