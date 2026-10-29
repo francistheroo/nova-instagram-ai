@@ -5,6 +5,7 @@ OAuth state is consumed with a single DELETE ... RETURNING operation, making
 it one-time across multiple app instances when backed by PostgreSQL.
 """
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -176,3 +177,52 @@ def delete_instagram_token(instagram_user_id: str) -> bool:
             (instagram_user_id,),
         ).fetchone()
     return row is not None
+
+
+# Dedicated session-level PostgreSQL advisory lock shared by all app workers.
+# The key is stable across releases and distinct from the Canva refresh lock.
+INSTAGRAM_REFRESH_ADVISORY_LOCK_KEY = 5642813379518752343
+
+
+class InstagramRefreshInProgress(RuntimeError):
+    """Raised when another worker is already refreshing the Instagram token."""
+
+
+@contextmanager
+def instagram_refresh_lock():
+    """Hold a shared PostgreSQL advisory lock for one complete token refresh."""
+    try:
+        conn = _connect()
+    except (OAuthStoreError, psycopg.Error):
+        raise OAuthStoreError("Instagram refresh lock storage is unavailable.") from None
+
+    acquired = False
+    try:
+        try:
+            row = conn.execute(
+                "SELECT pg_try_advisory_lock(%s) AS acquired",
+                (INSTAGRAM_REFRESH_ADVISORY_LOCK_KEY,),
+            ).fetchone()
+            conn.commit()
+        except psycopg.Error:
+            raise OAuthStoreError("Instagram refresh lock storage is unavailable.") from None
+
+        acquired = bool(row and row["acquired"])
+        if not acquired:
+            raise InstagramRefreshInProgress("An Instagram token refresh is already in progress.")
+
+        yield
+    finally:
+        try:
+            if acquired:
+                try:
+                    conn.execute(
+                        "SELECT pg_advisory_unlock(%s)",
+                        (INSTAGRAM_REFRESH_ADVISORY_LOCK_KEY,),
+                    )
+                    conn.commit()
+                except psycopg.Error:
+                    # Closing the dedicated connection still releases the session lock.
+                    pass
+        finally:
+            conn.close()
