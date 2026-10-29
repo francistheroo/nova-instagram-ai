@@ -174,3 +174,32 @@ def test_webhook_ignores_invalid_timestamp_without_generating_reply(monkeypatch)
     assert response.json()["automatic_replies_sent"] == 0
     assert response.json()["automatic_replies_skipped"] == 1
     assert finished == [("invalid-timestamp-mid", "ignored")]
+
+
+def test_webhook_ignores_out_of_range_timestamp_without_crashing(monkeypatch):
+    monkeypatch.setenv("META_APP_SECRET", "test-app-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    finished = []
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda message_id: True)
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *args, **kwargs: "stored")
+    monkeypatch.setattr(webhook, "finish_dm_event", lambda message_id, status: finished.append((message_id, status)))
+
+    async def unexpected_generation(*args, **kwargs):
+        pytest.fail("Out-of-range timestamp must not generate an automatic reply")
+
+    monkeypatch.setattr(webhook, "generate_dm_reply", unexpected_generation)
+    payload = {
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "12345"},
+                "timestamp": 10 ** 100,
+                "message": {"mid": "out-of-range-timestamp-mid", "text": "Hello NOVA"},
+            }]
+        }]
+    }
+    response = _post_signed_payload(monkeypatch, payload)
+
+    assert response.status_code == 200
+    assert response.json()["automatic_replies_sent"] == 0
+    assert response.json()["automatic_replies_skipped"] == 1
+    assert finished == [("out-of-range-timestamp-mid", "ignored")]
