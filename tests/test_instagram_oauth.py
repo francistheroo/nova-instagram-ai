@@ -462,12 +462,14 @@ def test_instagram_refresh_rejects_missing_or_malformed_stored_credentials(monke
     assert "some-token" not in response.text
 
 
-@pytest.mark.parametrize("expires_at", ["not-a-date", datetime(2030, 1, 1)])
+@pytest.mark.parametrize("expires_at", ["not-a-date", "naive"])
 def test_instagram_refresh_rejects_invalid_stored_expiry(monkeypatch, expires_at):
     from datetime import datetime
 
     from app import instagram_oauth
 
+    if expires_at == "naive":
+        expires_at = datetime(2030, 1, 1)
     _configure_instagram_refresh(
         monkeypatch,
         {"instagram_user_id": "123456", "access_token": "old-access", "expires_at": expires_at},
