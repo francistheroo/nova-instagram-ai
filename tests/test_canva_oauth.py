@@ -570,11 +570,14 @@ def test_canva_refresh_returns_conflict_when_another_worker_holds_lock(monkeypat
 
 
 def test_canva_refresh_requires_database_lock_configuration(monkeypatch):
+    from contextlib import contextmanager
+
     from app import canva_oauth
     from app.canva_store import CanvaStoreError
 
     _configure_canva_refresh(monkeypatch)
 
+    @contextmanager
     def unavailable_lock():
         raise CanvaStoreError("private connection detail")
         yield
