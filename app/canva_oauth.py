@@ -52,7 +52,7 @@ async def canva_oauth_start():
         state = create_oauth_state()
         payload = validate_oauth_state(state)
         save_oauth_state(payload["nonce"], expires_at=datetime.now(timezone.utc) + timedelta(minutes=10))
-    except (OAuthSecurityError, OAuthStoreError):
+    except (OAuthSecurityError, OAuthStoreError, psycopg.Error):
         raise HTTPException(status_code=503, detail="Canva OAuth security storage is not ready. Check server configuration.") from None
 
     verifier = secrets.token_urlsafe(64)
@@ -97,7 +97,7 @@ async def canva_oauth_callback(
             raise HTTPException(status_code=400, detail="Canva OAuth state was already used or expired.")
     except OAuthSecurityError:
         raise HTTPException(status_code=400, detail="Canva OAuth state is invalid or expired.") from None
-    except OAuthStoreError:
+    except (OAuthStoreError, psycopg.Error):
         raise HTTPException(status_code=503, detail="Canva OAuth state storage is unavailable.") from None
 
     try:
