@@ -48,6 +48,15 @@ Updated: 2026-10-29 (verified against GitHub)
 - A timeout after Meta accepts a send but before NOVA receives the response can still cause a duplicate on retry; public APIs do not provide a general idempotency key for this send.
 - Mocked tests do not prove production PostgreSQL concurrency or live Meta behavior. Run PostgreSQL integration tests only with a dedicated `NOVA_TEST_DATABASE_URL`.
 
+## Current work — draft PR #62 (not merged/deployed)
+- PR: https://github.com/francistheroo/nova-instagram-ai/pull/62
+- Branch: `feature/webhook-dm-retries`
+- Current latest commit: `deeaad4f602ea412704bcac6d764c7f10a0b06c4`
+- Adds a regression test for retry after a transient AI generation failure and marks an event retryable immediately if inbound memory storage fails after claim.
+- The first CI run on commit `7fdf25ed0b153b6f4063d0cde6bc4b45c4f5f102` failed (231 passed, 4 skipped, 2 failed). One failure was the new retry test; the other was a CancelledError in a separate webhook shape test. The retry test's fake HTTP client patched the shared `httpx.AsyncClient`, which could interfere with TestClient internals. Latest commit isolates the mock by replacing only the webhook module's `httpx` reference.
+- CI has not yet reported a run for latest commit `deeaad4f602ea412704bcac6d764c7f10a0b06c4`; do not claim it passes until checked.
+- PR title: “Release failed DM claims and test AI retry”. Keep draft until latest CI passes and code/tests are reviewed.
+
 ## Recommended next engineering work
 1. Continue focused regression tests for webhook parsing, timestamp handling, and retry-state edge cases.
 2. Run the opt-in PostgreSQL integration suite against a dedicated test database when available.
