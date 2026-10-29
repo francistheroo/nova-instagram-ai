@@ -10,6 +10,10 @@ import app.instagram_webhook as webhook
 client = TestClient(app)
 
 
+def _signature(secret: str, raw: bytes) -> str:
+    return "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+
+
 def test_webhook_verification_challenge(monkeypatch):
     monkeypatch.setenv("INSTAGRAM_WEBHOOK_VERIFY_TOKEN", "verify-me")
     response = client.get(
@@ -30,6 +34,46 @@ def test_webhook_rejects_bad_signature(monkeypatch):
     assert response.status_code == 401
 
 
+def test_webhook_rejects_signed_malformed_json(monkeypatch):
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    raw = b'{"entry":'
+    response = client.post(
+        "/webhooks/instagram",
+        content=raw,
+        headers={"X-Hub-Signature-256": _signature(secret, raw)},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid JSON payload."
+
+
+def test_webhook_storage_runtime_error_returns_service_unavailable(monkeypatch):
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("DM memory storage is unavailable.")
+
+    monkeypatch.setattr(webhook, "store_dm_message", unavailable)
+    raw = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "12345"},
+                "message": {"mid": "test-mid-storage-error", "text": "Hello NOVA"},
+            }]
+        }],
+    }).encode()
+    response = client.post(
+        "/webhooks/instagram",
+        content=raw,
+        headers={"X-Hub-Signature-256": _signature(secret, raw), "Content-Type": "application/json"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "DM memory storage is unavailable."
+
+
 def test_webhook_stores_signed_incoming_text_only(monkeypatch):
     app_secret = "test-app-secret"
     monkeypatch.setenv("META_APP_SECRET", app_secret)
@@ -46,7 +90,7 @@ def test_webhook_stores_signed_incoming_text_only(monkeypatch):
         }]
     }
     raw = json.dumps(payload).encode()
-    signature = "sha256=" + hmac.new(app_secret.encode(), raw, hashlib.sha256).hexdigest()
+    signature = _signature(app_secret, raw)
     response = client.post(
         "/webhooks/instagram",
         content=raw,
