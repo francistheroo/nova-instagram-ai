@@ -54,6 +54,7 @@ def test_duplicate_message_id_is_not_replied_to_twice(monkeypatch):
 
 def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
     from datetime import datetime, timezone
+    from types import SimpleNamespace
 
     secret = "test-app-secret"
     monkeypatch.setenv("META_APP_SECRET", secret)
@@ -68,7 +69,7 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
 
     def claim(message_id):
         claims.append(message_id)
-        return True  # First delivery, then retryable redelivery is reclaimed.
+        return True
 
     def finish(message_id, status):
         finishes.append((message_id, status))
@@ -76,7 +77,7 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
     def store(recipient_id, role, message, message_id=None):
         if role == "user":
             user_store_calls.append(message_id)
-            # The retry finds the user message already in short-lived memory.
+            # Retry finds the user message already in short-lived memory.
             return datetime.now(timezone.utc) if len(user_store_calls) == 1 else None
         return datetime.now(timezone.utc)
 
@@ -90,6 +91,10 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
         is_success = True
 
     class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
         async def __aenter__(self):
             return self
 
@@ -103,7 +108,6 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
     monkeypatch.setattr(webhook, "finish_dm_event", finish)
     monkeypatch.setattr(webhook, "store_dm_message", store)
     monkeypatch.setattr(webhook, "generate_dm_reply", generate)
-    from types import SimpleNamespace
     monkeypatch.setattr(webhook, "httpx", SimpleNamespace(AsyncClient=FakeAsyncClient))
 
     payload = {
