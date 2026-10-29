@@ -327,3 +327,205 @@ def test_canva_refresh_rejects_malformed_provider_response(monkeypatch, replacem
     assert response.status_code == 502
     assert "old-refresh" not in response.text
     assert "test-client-secret" not in response.text
+
+
+def _configure_canva_refresh(monkeypatch, current=None):
+    from app import canva_oauth
+
+    monkeypatch.setenv("NOVA_API_KEY", "canva-refresh-test-key")
+    monkeypatch.setenv("CANVA_CLIENT_ID", "canva-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "canva-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    if current is None:
+        current = {
+            "user_id": "canva-user",
+            "access_token": "old-canva-access-secret",
+            "refresh_token": "old-canva-refresh-secret",
+            "expires_at": None,
+        }
+    monkeypatch.setattr(canva_oauth, "load_latest_canva_tokens", lambda: current)
+    return canva_oauth, current
+
+
+def test_canva_refresh_rotates_token_and_preserves_account_id(monkeypatch):
+    from datetime import datetime, timezone
+
+    from app import canva_oauth
+
+    _configure_canva_refresh(monkeypatch)
+    saved = []
+    monkeypatch.setattr(
+        canva_oauth,
+        "save_canva_tokens",
+        lambda bundle, *, expires_at: saved.append((bundle.copy(), expires_at)),
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return {
+                "access_token": "new-canva-access-secret",
+                "refresh_token": "new-canva-refresh-secret",
+                "expires_in": 3600,
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, *, auth, data, headers):
+            assert url == "https://api.canva.com/rest/v1/oauth/token"
+            assert auth == ("canva-client", "canva-client-secret")
+            assert data == {
+                "grant_type": "refresh_token",
+                "refresh_token": "old-canva-refresh-secret",
+            }
+            assert headers["Content-Type"] == "application/x-www-form-urlencoded"
+            return FakeResponse()
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "canva-refresh-test-key"})
+
+    assert response.status_code == 200
+    assert response.json()["refreshed"] is True
+    assert response.json()["token_returned"] is False
+    assert saved[0][0]["user_id"] == "canva-user"
+    assert saved[0][0]["access_token"] == "new-canva-access-secret"
+    assert saved[0][0]["refresh_token"] == "new-canva-refresh-secret"
+    assert saved[0][1] > datetime.now(timezone.utc)
+    assert "new-canva-access-secret" not in response.text
+    assert "new-canva-refresh-secret" not in response.text
+    assert "old-canva-refresh-secret" not in response.text
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        [],
+        "unexpected",
+        {},
+        {"user_id": "canva-user", "refresh_token": ""},
+        {"user_id": "canva-user", "refresh_token": []},
+    ],
+)
+def test_canva_refresh_rejects_malformed_stored_refresh_credentials(monkeypatch, stored):
+    from app import canva_oauth
+
+    _configure_canva_refresh(monkeypatch, stored)
+
+    class NoRequestClient:
+        async def __aenter__(self):
+            pytest.fail("Malformed stored credentials must not call Canva")
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: NoRequestClient())
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "canva-refresh-test-key"})
+
+    assert response.status_code == 503
+    assert "old-canva-refresh-secret" not in response.text
+
+
+@pytest.mark.parametrize(
+    "provider_status,expected_status",
+    [(400, 409), (401, 409), (403, 409), (429, 503), (500, 502), (503, 502)],
+)
+def test_canva_refresh_classifies_provider_failures_without_leaking_token(
+    monkeypatch, provider_status, expected_status
+):
+    from app import canva_oauth
+
+    _configure_canva_refresh(monkeypatch)
+
+    class FakeResponse:
+        is_error = True
+        status_code = provider_status
+
+        def json(self):
+            return {"error": {"message": "private Canva provider detail"}}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "canva-refresh-test-key"})
+
+    assert response.status_code == expected_status
+    assert "old-canva-refresh-secret" not in response.text
+    assert "private Canva provider detail" not in response.text
+
+
+def test_canva_refresh_maps_database_read_failure_to_service_unavailable(monkeypatch):
+    import psycopg
+
+    from app import canva_oauth
+
+    monkeypatch.setenv("NOVA_API_KEY", "canva-refresh-test-key")
+    monkeypatch.setenv("CANVA_CLIENT_ID", "canva-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "canva-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    monkeypatch.setattr(
+        canva_oauth,
+        "load_latest_canva_tokens",
+        lambda: (_ for _ in ()).throw(psycopg.OperationalError("private Canva database error")),
+    )
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "canva-refresh-test-key"})
+
+    assert response.status_code == 503
+    assert "private Canva database error" not in response.text
+
+
+def test_canva_refresh_warns_if_rotated_token_bundle_cannot_be_saved(monkeypatch):
+    import psycopg
+
+    from app import canva_oauth
+
+    _configure_canva_refresh(monkeypatch)
+    monkeypatch.setattr(
+        canva_oauth,
+        "save_canva_tokens",
+        lambda *args, **kwargs: (_ for _ in ()).throw(psycopg.OperationalError("private database error")),
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return {
+                "access_token": "new-canva-access-secret",
+                "refresh_token": "new-canva-refresh-secret",
+                "expires_in": 3600,
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/canva/refresh", headers={"X-NOVA-API-Key": "canva-refresh-test-key"})
+
+    assert response.status_code == 503
+    assert "old refresh token" in response.json()["detail"].lower()
+    assert "new-canva-access-secret" not in response.text
+    assert "new-canva-refresh-secret" not in response.text
+    assert "private database error" not in response.text

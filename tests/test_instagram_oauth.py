@@ -304,3 +304,323 @@ def test_instagram_callback_rejects_malformed_long_token_payload(monkeypatch, lo
     assert response.status_code == 502
     assert "short-token" not in response.text
     assert "client_secret" not in response.text
+
+
+def _configure_instagram_refresh(monkeypatch, stored="default"):
+    from datetime import datetime, timedelta, timezone
+
+    from app import instagram_oauth
+
+    monkeypatch.setenv("NOVA_API_KEY", "refresh-test-key")
+    configure_oauth(monkeypatch)
+    if stored == "default":
+        stored = {
+            "instagram_user_id": "123456",
+            "access_token": "old-access-secret",
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=30),
+        }
+    monkeypatch.setattr(instagram_oauth, "load_latest_instagram_token", lambda: stored)
+    return instagram_oauth, stored
+
+
+def test_instagram_refresh_stores_new_token_without_returning_it(monkeypatch):
+    from datetime import datetime, timezone
+
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(monkeypatch)
+    saved = []
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda user_id, token, *, expires_at: saved.append((user_id, token, expires_at)),
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return {"access_token": "new-access-secret", "expires_in": 7200}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *, params):
+            assert url == "https://graph.instagram.com/refresh_access_token"
+            assert params == {"grant_type": "ig_refresh_token", "access_token": "old-access-secret"}
+            return FakeResponse()
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "refreshed"
+    assert response.json()["token_returned"] is False
+    assert saved[0][0] == "123456"
+    assert saved[0][1] == "new-access-secret"
+    assert saved[0][2] > datetime.now(timezone.utc)
+    assert "new-access-secret" not in response.text
+    assert "old-access-secret" not in response.text
+
+
+def test_instagram_refresh_preserves_known_expiry_when_provider_omits_it(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(monkeypatch)
+    fallback = datetime.now(timezone.utc) + timedelta(days=12)
+    stored = {"instagram_user_id": "123456", "access_token": "old-access", "expires_at": fallback}
+    monkeypatch.setattr(instagram_oauth, "load_latest_instagram_token", lambda: stored)
+    saved = []
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda user_id, token, *, expires_at: saved.append((user_id, token, expires_at)),
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return {"access_token": "new-access"}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+
+    assert response.status_code == 200
+    assert saved[0][2] == fallback
+    assert response.json()["expires_at"] == fallback.isoformat()
+
+
+def test_instagram_refresh_rejects_expired_token_without_contacting_provider(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(
+        monkeypatch,
+        {"instagram_user_id": "123456", "access_token": "expired-secret", "expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)},
+    )
+
+    class NoRequestClient:
+        async def __aenter__(self):
+            pytest.fail("An already-expired token must not be refreshed")
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: NoRequestClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+    assert response.status_code == 409
+    assert "Reconnect Instagram" in response.json()["detail"]
+    assert "expired-secret" not in response.text
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        None,
+        [],
+        {},
+        {"instagram_user_id": "123456", "access_token": "", "expires_at": None},
+        {"instagram_user_id": "", "access_token": "some-token", "expires_at": None},
+    ],
+)
+def test_instagram_refresh_rejects_missing_or_malformed_stored_credentials(monkeypatch, stored):
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(monkeypatch, stored)
+
+    class NoRequestClient:
+        async def __aenter__(self):
+            pytest.fail("Malformed stored credentials must be rejected before contacting Instagram")
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: NoRequestClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+
+    assert response.status_code in (404, 503)
+    assert "some-token" not in response.text
+
+
+@pytest.mark.parametrize("expires_at", ["not-a-date", "naive"])
+def test_instagram_refresh_rejects_invalid_stored_expiry(monkeypatch, expires_at):
+    from datetime import datetime
+
+    from app import instagram_oauth
+
+    if expires_at == "naive":
+        expires_at = datetime(2030, 1, 1)
+    _configure_instagram_refresh(
+        monkeypatch,
+        {"instagram_user_id": "123456", "access_token": "old-access", "expires_at": expires_at},
+    )
+
+    class NoRequestClient:
+        async def __aenter__(self):
+            pytest.fail("Invalid stored expiry must be rejected before contacting Instagram")
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: NoRequestClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+    assert response.status_code == 503
+
+
+@pytest.mark.parametrize(
+    "provider_status,expected_status",
+    [(400, 409), (401, 409), (403, 409), (429, 503), (500, 502), (503, 502)],
+)
+def test_instagram_refresh_classifies_provider_failures_without_leaking_token(
+    monkeypatch, provider_status, expected_status
+):
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(monkeypatch)
+
+    class FakeResponse:
+        is_error = True
+        status_code = provider_status
+
+        def json(self):
+            return {"error": {"message": "private upstream detail"}}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+
+    assert response.status_code == expected_status
+    assert "old-access-secret" not in response.text
+    assert "private upstream detail" not in response.text
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        [],
+        "unexpected",
+        {},
+        {"access_token": []},
+        {"access_token": "new-token", "expires_in": "3600"},
+        {"access_token": "new-token", "expires_in": True},
+        {"access_token": "new-token", "expires_in": float("inf")},
+        {"access_token": "new-token", "expires_in": 10**100},
+    ],
+)
+def test_instagram_refresh_does_not_save_malformed_provider_payload(monkeypatch, payload):
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(monkeypatch)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda *args, **kwargs: pytest.fail("Malformed refresh response must not be saved"),
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+
+    assert response.status_code == 502
+    assert "old-access-secret" not in response.text
+    assert "new-token" not in response.text
+
+
+def test_instagram_refresh_maps_database_read_failure_to_service_unavailable(monkeypatch):
+    import psycopg
+
+    from app import instagram_oauth
+
+    monkeypatch.setenv("NOVA_API_KEY", "refresh-test-key")
+    configure_oauth(monkeypatch)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "load_latest_instagram_token",
+        lambda: (_ for _ in ()).throw(psycopg.OperationalError("private database connection detail")),
+    )
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+    assert response.status_code == 503
+    assert "private database connection detail" not in response.text
+
+
+def test_instagram_refresh_reports_save_failure_without_returning_new_token(monkeypatch):
+    import psycopg
+
+    from app import instagram_oauth
+
+    _configure_instagram_refresh(monkeypatch)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda *args, **kwargs: (_ for _ in ()).throw(psycopg.OperationalError("private database error")),
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return {"access_token": "new-access-secret", "expires_in": 7200}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post("/oauth/instagram/refresh", headers={"X-NOVA-API-Key": "refresh-test-key"})
+
+    assert response.status_code == 503
+    assert "new-access-secret" not in response.text
+    assert "private database error" not in response.text

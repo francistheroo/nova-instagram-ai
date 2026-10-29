@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
+import psycopg
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
@@ -133,13 +134,17 @@ async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
     client_id, client_secret, _ = _config()
     try:
         current = load_latest_canva_tokens()
-    except CanvaStoreError:
+    except (CanvaStoreError, OAuthSecurityError, psycopg.Error):
         raise HTTPException(status_code=503, detail="Canva token storage is unavailable or could not be decrypted.") from None
     if not current:
         raise HTTPException(status_code=503, detail="Canva is not connected. Complete /oauth/canva/start first.")
+    if not isinstance(current, dict):
+        raise HTTPException(status_code=503, detail="Stored Canva credentials are malformed. Reconnect Canva.")
+
     refresh_token = current.get("refresh_token")
-    if not isinstance(refresh_token, str) or not refresh_token:
+    if not isinstance(refresh_token, str) or not refresh_token.strip():
         raise HTTPException(status_code=503, detail="No Canva refresh token is stored. Reconnect Canva to grant access again.")
+    user_id = current.get("user_id")
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -150,7 +155,21 @@ async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         if response.is_error:
-            raise HTTPException(status_code=502, detail="Canva token refresh failed. Reconnect Canva if the refresh token has been revoked or already used.")
+            if response.status_code in (400, 401, 403):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Canva rejected the stored refresh token. Reconnect Canva and authorize access again.",
+                )
+            if response.status_code == 429:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Canva temporarily rate-limited token refresh. Try again later; no replacement token was saved.",
+                )
+            raise HTTPException(
+                status_code=502,
+                detail="Canva token refresh failed due to a provider error. Verify the connection before retrying because refresh tokens are single-use.",
+            )
+
         replacement = response.json()
         if (
             not isinstance(replacement, dict)
@@ -159,15 +178,33 @@ async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
             or not isinstance(replacement.get("refresh_token"), str)
             or not replacement["refresh_token"].strip()
         ):
-            raise HTTPException(status_code=502, detail="Canva did not return a complete replacement token bundle.")
+            raise HTTPException(
+                status_code=502,
+                detail="Canva did not return a complete replacement token bundle. Reconnect Canva if the current refresh token no longer works.",
+            )
+
         # Keep the existing account key if Canva omits user_id from refresh responses.
-        if current.get("user_id") and not replacement.get("user_id"):
-            replacement["user_id"] = current["user_id"]
+        if user_id and not replacement.get("user_id"):
+            replacement["user_id"] = user_id
         expires_at = token_expiry_from_seconds(replacement.get("expires_in"))
-        save_canva_tokens(replacement, expires_at=expires_at)
     except HTTPException:
         raise
-    except (httpx.HTTPError, ValueError, TypeError, CanvaStoreError):
-        raise HTTPException(status_code=502, detail="Canva token refresh could not be completed. Check server configuration without logging credentials.") from None
+    except (httpx.HTTPError, ValueError, TypeError, OverflowError):
+        raise HTTPException(
+            status_code=502,
+            detail="Canva token refresh could not be completed. Verify the account before retrying because refresh tokens are single-use.",
+        ) from None
 
-    return {"refreshed": True, "expires_at": expires_at.isoformat() if expires_at else None, "token_returned": False}
+    try:
+        save_canva_tokens(replacement, expires_at=expires_at)
+    except (CanvaStoreError, OAuthSecurityError, OAuthStoreError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Canva issued a replacement token bundle but NOVA could not save it securely. Fix database and encryption-key configuration, then reconnect Canva if needed; do not retry with the old refresh token.",
+        ) from None
+
+    return {
+        "refreshed": True,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+        "token_returned": False,
+    }
