@@ -306,14 +306,14 @@ def test_instagram_callback_rejects_malformed_long_token_payload(monkeypatch, lo
     assert "client_secret" not in response.text
 
 
-def _configure_instagram_refresh(monkeypatch, stored=None):
+def _configure_instagram_refresh(monkeypatch, stored="default"):
     from datetime import datetime, timedelta, timezone
 
     from app import instagram_oauth
 
     monkeypatch.setenv("NOVA_API_KEY", "refresh-test-key")
     configure_oauth(monkeypatch)
-    if stored is None:
+    if stored == "default":
         stored = {
             "instagram_user_id": "123456",
             "access_token": "old-access-secret",
