@@ -28,24 +28,31 @@ Updated: 2026-10-29 (verified against GitHub)
 - PR #38: expired processing lease recovery tests.
 - PR #40: duplicate webhook delivery test when auto-replies are disabled.
 - PR #41: missing stable Meta message ID test; merged.
-- PR #42: invalid webhook signature and echo-event safety tests; merged. The associated GitHub Actions run #85 reported success.
-- PR #42 merge commit: `52ab33d45f1c3f219b18b9446ae56a243e442726`.
+- PR #42: invalid webhook signature and echo-event safety tests; GitHub Actions run #85 succeeded.
+- PR #43: refreshed recovery checkpoint.
+- PR #44: opt-in PostgreSQL retry-state integration tests; requires `NOVA_TEST_DATABASE_URL` and does not fall back to `DATABASE_URL`.
+- PR #45: malformed signed JSON returns HTTP 400 and storage runtime failures return HTTP 503; GitHub Actions run #91 succeeded.
+- PR #46: added regression coverage for unsupported webhook payload shapes.
+- PR #47: normalized malformed non-list `entry` and `messaging` fields before iteration; GitHub Actions run #95 succeeded.
+- PR #48: invalid timestamp regression test; merged as `2df6c19d20a1a05500b28918266f5d855d8a21e4`. GitHub Actions run #97 succeeded for head commit `f62a6c413e138ef4a17cbb62562340dd54cda014`.
 
 ## DM webhook behavior to remember
 - Incoming text messages are verified using `X-Hub-Signature-256` and `META_APP_SECRET`.
-- Echo messages are ignored.
-- Stable Meta `message.mid` is required for automatic replies and safe retry claims. Messages without a stable ID may be stored but must not trigger AI replies.
+- Invalid JSON is rejected with HTTP 400; storage/runtime failures return HTTP 503.
+- Echo messages are ignored. Malformed collection fields are treated as empty lists rather than crashing.
+- Stable Meta `message.mid` is required for automatic replies and safe retry claims. Messages without a stable ID must not trigger AI replies.
+- Invalid event timestamps are marked ignored; they must not trigger AI generation.
 - Duplicate inbound message IDs are protected by database uniqueness.
-- Retry state is tracked separately from conversation memory; transient AI/Meta failures can be retried on a later webhook delivery.
+- Retry state is tracked separately from conversation memory with `processing`, `sent`, `retryable`, and `ignored` outcomes. Expired processing leases can be reclaimed.
 - Replies are opt-in and must remain disabled unless the user explicitly authorizes enabling live behavior and the required Meta permissions/configuration are verified.
 - A timeout after Meta accepts a send but before NOVA receives the response can still cause a duplicate on retry; public APIs do not provide a general idempotency key for this send.
-- Mocked tests do not prove production PostgreSQL concurrency or live Meta behavior.
+- Mocked tests do not prove production PostgreSQL concurrency or live Meta behavior. Run PostgreSQL integration tests only with a dedicated `NOVA_TEST_DATABASE_URL`.
 
 ## Recommended next engineering work
-1. Add safe PostgreSQL-backed tests for retry-state transitions and concurrent claims, using a dedicated test database only.
-2. Review webhook error handling for malformed payloads and database outages; add focused regression tests together in one PR.
-3. Verify current GitHub Actions results by exact commit SHA before reporting CI as passed.
-4. Keep PRs draft until tests and schema are reviewed. Do not merge or deploy without user authorization.
+1. Continue focused regression tests for webhook parsing, timestamp handling, and retry-state edge cases.
+2. Run the opt-in PostgreSQL integration suite against a dedicated test database when available.
+3. Verify GitHub Actions results by exact commit SHA before reporting CI as passed.
+4. Keep new PRs draft until tests and schema are reviewed. Do not merge or deploy without user authorization.
 
 ## Workflow
-The user often says “Next” to request another incremental step. Make real repository progress, combine closely related changes in one PR, and report exact verified status. Recheck GitHub before relying on this checkpoint in a future chat.
+The user often says “Next” or “Fast” to request another incremental step. Make real repository progress, group related changes into one PR, and report exact verified status. Recheck GitHub before relying on this checkpoint in a future chat.
