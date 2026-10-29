@@ -36,7 +36,11 @@ def initialize_canva_schema() -> None:
         """)
 
 
-def _account_key_from_bundle(token_bundle: dict[str, Any]) -> str:
+def _account_key_from_bundle(
+    token_bundle: dict[str, Any],
+    *,
+    fallback_account_key: str = "default",
+) -> str:
     """Validate a token bundle and derive its stable account key."""
     if not isinstance(token_bundle, dict):
         raise CanvaStoreError("A Canva token bundle must be an object.")
@@ -46,7 +50,7 @@ def _account_key_from_bundle(token_bundle: dict[str, Any]) -> str:
 
     user_id = token_bundle.get("user_id")
     if user_id is None:
-        return "default"
+        return fallback_account_key
     if isinstance(user_id, bool) or not isinstance(user_id, (str, int)):
         raise CanvaStoreError("The Canva account ID is malformed.")
     account_key = str(user_id).strip()
@@ -57,7 +61,13 @@ def _account_key_from_bundle(token_bundle: dict[str, Any]) -> str:
 
 def save_canva_tokens(token_bundle: dict[str, Any], *, expires_at: datetime | None) -> None:
     """Encrypt and atomically upsert one account's Canva token bundle."""
-    account_key = _account_key_from_bundle(token_bundle)
+    configured_key = os.getenv("CANVA_ACCOUNT_KEY", "").strip()
+    account_key = _account_key_from_bundle(
+        token_bundle,
+        fallback_account_key=configured_key or "default",
+    )
+    if configured_key and token_bundle.get("user_id") is not None and account_key != configured_key:
+        raise CanvaStoreError("CANVA_ACCOUNT_KEY does not match the Canva token bundle account ID.")
     if expires_at is not None and (
         not isinstance(expires_at, datetime)
         or expires_at.tzinfo is None
@@ -65,8 +75,15 @@ def save_canva_tokens(token_bundle: dict[str, Any], *, expires_at: datetime | No
     ):
         raise CanvaStoreError("Token expiry must be timezone-aware.")
 
+    # Store the row's selected account key inside the encrypted envelope as well.
+    # This preserves account binding even when the provider omits user_id.
+    envelope = {
+        "_nova_canva_store_version": 1,
+        "account_key": account_key,
+        "token_bundle": token_bundle,
+    }
     try:
-        serialized = json.dumps(token_bundle, separators=(",", ":"), allow_nan=False)
+        serialized = json.dumps(envelope, separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError):
         raise CanvaStoreError("Canva token bundle is not valid JSON data.") from None
     encrypted = encrypt_access_token(serialized)
@@ -88,18 +105,35 @@ def _decode_canva_token_row(row: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(account_key, str) or not account_key.strip() or not isinstance(encrypted, str) or not encrypted:
         raise CanvaStoreError("Stored Canva token record is malformed.")
     try:
-        bundle = json.loads(decrypt_access_token(encrypted))
+        decoded = json.loads(decrypt_access_token(encrypted))
     except (OAuthSecurityError, ValueError, TypeError, UnicodeError):
         raise CanvaStoreError("Stored Canva token bundle cannot be decrypted or parsed.") from None
-    if not isinstance(bundle, dict):
+    if not isinstance(decoded, dict):
         raise CanvaStoreError("Stored Canva token bundle is malformed.")
 
-    try:
-        bundle_account_key = _account_key_from_bundle(bundle)
-    except CanvaStoreError:
-        raise CanvaStoreError("Stored Canva token bundle is malformed.") from None
-    if bundle_account_key != account_key:
-        raise CanvaStoreError("Stored Canva token bundle does not match its account key.")
+    # New rows carry an authenticated account-key envelope. Also support legacy
+    # rows created before this format, verifying their embedded user_id when present.
+    if decoded.get("_nova_canva_store_version") == 1:
+        bundle = decoded.get("token_bundle")
+        if decoded.get("account_key") != account_key or not isinstance(bundle, dict):
+            raise CanvaStoreError("Stored Canva token bundle does not match its account key.")
+        try:
+            bundle_account_key = _account_key_from_bundle(
+                bundle,
+                fallback_account_key=account_key,
+            )
+        except CanvaStoreError:
+            raise CanvaStoreError("Stored Canva token bundle is malformed.") from None
+        if bundle_account_key != account_key:
+            raise CanvaStoreError("Stored Canva token bundle does not match its account key.")
+    else:
+        bundle = decoded
+        try:
+            bundle_account_key = _account_key_from_bundle(bundle)
+        except CanvaStoreError:
+            raise CanvaStoreError("Stored Canva token bundle is malformed.") from None
+        if bundle_account_key != account_key:
+            raise CanvaStoreError("Stored Canva token bundle does not match its account key.")
 
     # The separate database column is authoritative for expiry metadata.
     bundle["expires_at"] = row.get("expires_at")
