@@ -648,3 +648,33 @@ def test_canva_callback_maps_token_storage_failure_to_safe_503(monkeypatch):
     assert "canva-access-secret" not in response.text
     assert "canva-refresh-secret" not in response.text
     assert "do not retry this authorization code" in response.json()["detail"]
+
+
+def test_canva_callback_maps_raw_postgres_state_error_to_503(monkeypatch):
+    import psycopg
+
+    from app import canva_oauth
+    from app.oauth_security import create_oauth_state
+
+    monkeypatch.setenv("CANVA_CLIENT_ID", "test-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    monkeypatch.setenv("OAUTH_STATE_SECRET", "s" * 48)
+    state = create_oauth_state()
+
+    def unavailable_state_storage(_nonce):
+        raise psycopg.OperationalError("private database failure")
+
+    monkeypatch.setattr(canva_oauth, "consume_oauth_state", unavailable_state_storage)
+    response = client.get(
+        "/oauth/canva/callback",
+        params={"code": "fake-canva-code", "state": state},
+        cookies={
+            "nova_canva_oauth_state": state,
+            "nova_canva_pkce_verifier": "test-pkce-verifier",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert "private database failure" not in response.text
