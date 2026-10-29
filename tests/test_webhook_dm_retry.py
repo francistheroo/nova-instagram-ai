@@ -85,9 +85,9 @@ def test_ai_failure_can_retry_even_when_user_message_was_already_stored(monkeypa
     first = post_event(secret)
     second = post_event(secret)
 
-    assert first.status_code == 200
+    assert first.status_code == 503
+    assert "retryable" in first.json()["detail"]
     assert second.status_code == 200
-    assert first.json()["automatic_replies_sent"] == 0
     assert second.json()["automatic_replies_sent"] == 1
     assert finishes == [
         ("mid.retry.1", "retryable"),
@@ -150,9 +150,9 @@ def test_meta_send_failure_can_retry_same_message(monkeypatch):
     first = post_event(secret)
     second = post_event(secret)
 
-    assert first.status_code == 200
+    assert first.status_code == 503
+    assert "retryable" in first.json()["detail"]
     assert second.status_code == 200
-    assert first.json()["automatic_replies_sent"] == 0
     assert second.json()["automatic_replies_sent"] == 1
     assert finishes == [
         ("mid.retry.1", "retryable"),

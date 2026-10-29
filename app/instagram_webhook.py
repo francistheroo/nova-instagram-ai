@@ -61,6 +61,7 @@ async def receive_instagram_webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
     stored = sent = skipped = 0
+    retry_requested = False
     auto_enabled = os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true"
     try:
         entries = payload.get("entry", []) if isinstance(payload, dict) else []
@@ -97,15 +98,21 @@ async def receive_instagram_webhook(
                     stored_until = store_dm_message(
                         sender_id, "user", text.strip(), message_id=message_id
                     )
+                except RuntimeError:
+                    # Preserve storage-unavailable errors for the outer handler,
+                    # which returns the specific HTTP 503 response.
+                    raise
                 except Exception:
-                    # Release a failed claim for prompt retry rather than waiting
-                    # for the lease to expire. Preserve the original storage error.
+                    # Ask Meta to redeliver failed storage work instead of
+                    # acknowledging the delivery as successfully processed.
                     if event_claimed and message_id:
                         try:
                             finish_dm_event(message_id, "retryable")
                         except Exception:
                             pass
-                    raise
+                    retry_requested = True
+                    skipped += 1
+                    continue
                 if stored_until is None and not event_claimed:
                     # Already stored and not claimed for retry: duplicate delivery.
                     skipped += 1
@@ -144,6 +151,7 @@ async def receive_instagram_webhook(
                     reply_text = (await generate_dm_reply(sender_id, text.strip())).strip()
                     if not reply_text:
                         finish_dm_event(message_id, "retryable")
+                        retry_requested = True
                         skipped += 1
                         continue
 
@@ -156,12 +164,14 @@ async def receive_instagram_webhook(
                             expiry = stored_token.get("expires_at")
                             if expiry is not None and expiry <= datetime.now(timezone.utc):
                                 finish_dm_event(message_id, "retryable")
+                                retry_requested = True
                                 skipped += 1
                                 continue
                             token = stored_token["access_token"]
                             user_id = user_id or stored_token["instagram_user_id"]
                     if not token or not user_id:
                         finish_dm_event(message_id, "retryable")
+                        retry_requested = True
                         skipped += 1
                         continue
 
@@ -182,12 +192,14 @@ async def receive_instagram_webhook(
                         sent += 1
                     else:
                         finish_dm_event(message_id, "retryable")
+                        retry_requested = True
                         skipped += 1
                 except Exception:
-                    # Retry transient AI/Meta failures on a later webhook delivery.
-                    # A timeout after Meta accepts a send can still cause a duplicate;
-                    # the public API offers no general idempotency key for this send.
+                    # A non-2xx response lets Meta retry this delivery. A timeout
+                    # after Meta accepts a send can still cause a duplicate; the
+                    # public API offers no general idempotency key for this send.
                     finish_dm_event(message_id, "retryable")
+                    retry_requested = True
                     skipped += 1
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -195,6 +207,12 @@ async def receive_instagram_webhook(
         if exc.__class__.__module__.startswith("psycopg"):
             raise HTTPException(status_code=503, detail="DM memory storage is unavailable.")
         raise
+
+    if retry_requested:
+        raise HTTPException(
+            status_code=503,
+            detail="One or more Instagram DM events are retryable; please retry this webhook delivery.",
+        )
 
     return {
         "received": True,
