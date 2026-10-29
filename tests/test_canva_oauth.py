@@ -1,8 +1,17 @@
+from contextlib import nullcontext
+
 import pytest
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+
+@pytest.fixture(autouse=True)
+def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
+    """Unit tests mock token storage/provider calls and do not need PostgreSQL."""
+    from app import canva_oauth
+
+    monkeypatch.setattr(canva_oauth, "canva_refresh_lock", lambda: nullcontext())
 
 client = TestClient(app)
 
@@ -529,3 +538,52 @@ def test_canva_refresh_warns_if_rotated_token_bundle_cannot_be_saved(monkeypatch
     assert "new-canva-access-secret" not in response.text
     assert "new-canva-refresh-secret" not in response.text
     assert "private database error" not in response.text
+
+
+def test_canva_refresh_returns_conflict_when_another_worker_holds_lock(monkeypatch):
+    from contextlib import contextmanager
+
+    from app import canva_oauth
+    from app.canva_store import CanvaRefreshInProgress
+
+    _configure_canva_refresh(monkeypatch)
+
+    @contextmanager
+    def busy_lock():
+        raise CanvaRefreshInProgress("already refreshing")
+        yield
+
+    monkeypatch.setattr(canva_oauth, "canva_refresh_lock", busy_lock)
+    monkeypatch.setattr(
+        canva_oauth,
+        "load_latest_canva_tokens",
+        lambda: pytest.fail("A busy refresh lock must not read or rotate the token"),
+    )
+
+    response = client.post(
+        "/oauth/canva/refresh",
+        headers={"X-NOVA-API-Key": "canva-refresh-test-key"},
+    )
+
+    assert response.status_code == 409
+    assert "already in progress" in response.json()["detail"]
+
+
+def test_canva_refresh_requires_database_lock_configuration(monkeypatch):
+    from app import canva_oauth
+    from app.canva_store import CanvaStoreError
+
+    _configure_canva_refresh(monkeypatch)
+
+    def unavailable_lock():
+        raise CanvaStoreError("private connection detail")
+        yield
+
+    monkeypatch.setattr(canva_oauth, "canva_refresh_lock", unavailable_lock)
+    response = client.post(
+        "/oauth/canva/refresh",
+        headers={"X-NOVA-API-Key": "canva-refresh-test-key"},
+    )
+
+    assert response.status_code == 503
+    assert "private connection detail" not in response.text
