@@ -52,3 +52,47 @@ def test_token_encryption_rejects_missing_key(monkeypatch):
     monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
     with pytest.raises(OAuthSecurityError, match="TOKEN_ENCRYPTION_KEY"):
         encrypt_access_token("sample")
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda state: state + "%%%",
+        lambda state: state + "é",
+        lambda state: state.replace(".", "..", 1),
+        lambda state: state + " ",
+    ],
+)
+def test_oauth_state_rejects_noncanonical_encodings(monkeypatch, mutate):
+    from app.oauth_security import create_oauth_state, validate_oauth_state, OAuthSecurityError
+
+    monkeypatch.setenv("OAUTH_STATE_SECRET", "x" * 48)
+    state = create_oauth_state(now=1000)
+    with pytest.raises(OAuthSecurityError):
+        validate_oauth_state(mutate(state), now=1000)
+
+
+def test_oauth_state_rejects_boolean_issued_at(monkeypatch):
+    import base64
+    import hashlib
+    import hmac
+    import json
+
+    from app.oauth_security import OAuthSecurityError, validate_oauth_state
+
+    secret = "x" * 48
+    monkeypatch.setenv("OAUTH_STATE_SECRET", secret)
+    payload = {
+        "iat": True,
+        "nonce": "n" * 43,
+    }
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    ).rstrip(b"=")
+    signature = base64.urlsafe_b64encode(
+        hmac.new(secret.encode(), encoded, hashlib.sha256).digest()
+    ).rstrip(b"=")
+    signed_state = (encoded + b"." + signature).decode("ascii")
+
+    with pytest.raises(OAuthSecurityError, match="payload"):
+        validate_oauth_state(signed_state, now=1000)
