@@ -690,3 +690,90 @@ def test_instagram_refresh_fails_closed_if_shared_lock_is_unavailable(monkeypatc
 
     assert response.status_code == 503
     assert "private database details" not in response.text
+
+
+def test_oauth_callback_reports_state_storage_outage_as_service_unavailable(monkeypatch):
+    from contextlib import nullcontext
+
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state
+    from app.oauth_store import OAuthStoreError
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+    monkeypatch.setattr(
+        instagram_oauth,
+        "consume_oauth_state",
+        lambda nonce: (_ for _ in ()).throw(OAuthStoreError("private database detail")),
+    )
+
+    class NoExchangeClient:
+        async def __aenter__(self):
+            pytest.fail("Provider exchange must not run when OAuth state storage is unavailable")
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: NoExchangeClient())
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert "private database detail" not in response.text
+
+
+def test_instagram_callback_maps_token_storage_failure_to_safe_503(monkeypatch):
+    import psycopg
+
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state, validate_oauth_state
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+    nonce = validate_oauth_state(state)["nonce"]
+    monkeypatch.setattr(instagram_oauth, "consume_oauth_state", lambda value: value == nonce)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda *args, **kwargs: (_ for _ in ()).throw(psycopg.OperationalError("private database detail")),
+    )
+
+    class FakeResponse:
+        is_error = False
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse({"access_token": "short-token-secret", "user_id": "123456"})
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse({"access_token": "long-token-secret", "expires_in": 3600})
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert "private database detail" not in response.text
+    assert "short-token-secret" not in response.text
+    assert "long-token-secret" not in response.text
+    assert "do not retry this authorization code" in response.json()["detail"]
