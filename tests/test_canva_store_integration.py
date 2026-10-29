@@ -166,3 +166,39 @@ def test_database_expiry_column_is_authoritative(canva_db):
     loaded = canva_store.load_canva_tokens(account_key)
     assert loaded is not None
     assert loaded["expires_at"] == expected_expiry
+
+
+def test_explicit_account_keys_isolate_token_bundles_without_provider_user_id(canva_db, monkeypatch):
+    first_key = "manual-canva-account-a-" + secrets.token_urlsafe(8)
+    second_key = "manual-canva-account-b-" + secrets.token_urlsafe(8)
+
+    monkeypatch.setenv("CANVA_ACCOUNT_KEY", first_key)
+    canva_store.save_canva_tokens({"access_token": "manual-access-a"}, expires_at=None)
+    monkeypatch.setenv("CANVA_ACCOUNT_KEY", second_key)
+    canva_store.save_canva_tokens({"access_token": "manual-access-b"}, expires_at=None)
+
+    assert canva_store.load_canva_tokens(first_key)["access_token"] == "manual-access-a"
+    assert canva_store.load_canva_tokens(second_key)["access_token"] == "manual-access-b"
+
+    monkeypatch.delenv("CANVA_ACCOUNT_KEY", raising=False)
+    with pytest.raises(CanvaStoreError, match="Multiple Canva accounts"):
+        canva_store.load_latest_canva_tokens()
+
+    monkeypatch.setenv("CANVA_ACCOUNT_KEY", second_key)
+    assert canva_store.load_latest_canva_tokens()["access_token"] == "manual-access-b"
+
+
+def test_legacy_single_account_row_remains_readable(canva_db):
+    # Older deployments encrypted the token bundle directly, without an envelope.
+    legacy_bundle = {"access_token": "legacy-access"}
+    encrypted = encrypt_access_token(json.dumps(legacy_bundle, separators=(",", ":")))
+    with psycopg.connect(canva_db["url"]) as conn:
+        conn.execute(
+            "INSERT INTO nova_canva_tokens (account_key, encrypted_token_bundle, expires_at) VALUES (%s, %s, NULL)",
+            ("default", encrypted),
+        )
+
+    loaded = canva_store.load_latest_canva_tokens()
+    assert loaded is not None
+    assert loaded["access_token"] == "legacy-access"
+    assert loaded["expires_at"] is None
