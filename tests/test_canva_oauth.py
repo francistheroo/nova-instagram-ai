@@ -590,3 +590,61 @@ def test_canva_refresh_requires_database_lock_configuration(monkeypatch):
 
     assert response.status_code == 503
     assert "private connection detail" not in response.text
+
+
+def test_canva_callback_maps_token_storage_failure_to_safe_503(monkeypatch):
+    import psycopg
+
+    from app import canva_oauth
+    from app.oauth_security import create_oauth_state, validate_oauth_state
+
+    monkeypatch.setenv("CANVA_CLIENT_ID", "test-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    monkeypatch.setenv("OAUTH_STATE_SECRET", "s" * 48)
+    state = create_oauth_state()
+    nonce = validate_oauth_state(state)["nonce"]
+    monkeypatch.setattr(canva_oauth, "consume_oauth_state", lambda value: value == nonce)
+    monkeypatch.setattr(
+        canva_oauth,
+        "save_canva_tokens",
+        lambda *args, **kwargs: (_ for _ in ()).throw(psycopg.OperationalError("private database detail")),
+    )
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return {
+                "access_token": "canva-access-secret",
+                "refresh_token": "canva-refresh-secret",
+                "expires_in": 3600,
+                "user_id": "canva-user",
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(canva_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/canva/callback",
+        params={"code": "fake-canva-code", "state": state},
+        cookies={
+            "nova_canva_oauth_state": state,
+            "nova_canva_pkce_verifier": "test-pkce-verifier",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert "private database detail" not in response.text
+    assert "canva-access-secret" not in response.text
+    assert "canva-refresh-secret" not in response.text
+    assert "do not retry this authorization code" in response.json()["detail"]
