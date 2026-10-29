@@ -144,3 +144,33 @@ def test_webhook_stores_signed_incoming_text_only(monkeypatch):
     assert response.json()["stored_text_messages"] == 1
     assert stored == [("12345", "user", "Hello NOVA", None)]
     assert response.json()["automatic_replies_sent"] == 0
+
+
+
+def test_webhook_ignores_invalid_timestamp_without_generating_reply(monkeypatch):
+    monkeypatch.setenv("META_APP_SECRET", "test-app-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    finished = []
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda message_id: True)
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *args, **kwargs: "stored")
+    monkeypatch.setattr(webhook, "finish_dm_event", lambda message_id, status: finished.append((message_id, status)))
+
+    async def unexpected_generation(*args, **kwargs):
+        pytest.fail("Invalid event timestamp must not generate an automatic reply")
+
+    monkeypatch.setattr(webhook, "generate_dm_reply", unexpected_generation)
+    payload = {
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "12345"},
+                "timestamp": "not-a-timestamp",
+                "message": {"mid": "invalid-timestamp-mid", "text": "Hello NOVA"},
+            }]
+        }]
+    }
+    response = _post_signed_payload(monkeypatch, payload)
+
+    assert response.status_code == 200
+    assert response.json()["automatic_replies_sent"] == 0
+    assert response.json()["automatic_replies_skipped"] == 1
+    assert finished == [("invalid-timestamp-mid", "ignored")]
