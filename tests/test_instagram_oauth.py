@@ -184,3 +184,123 @@ def test_oauth_callback_rejects_oversized_query_values(monkeypatch, parameter, v
     configure_oauth(monkeypatch)
     response = client.get("/oauth/instagram/callback", params={parameter: value})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "short_payload",
+    [
+        None,
+        [],
+        "unexpected",
+        {},
+        {"access_token": [] , "user_id": "123456"},
+        {"access_token": "short-token", "user_id": {"nested": "id"}},
+    ],
+)
+def test_instagram_callback_rejects_malformed_short_token_payload(monkeypatch, short_payload):
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state, validate_oauth_state
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+    nonce = validate_oauth_state(state)["nonce"]
+    monkeypatch.setattr(instagram_oauth, "consume_oauth_state", lambda value: value == nonce)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda *args, **kwargs: pytest.fail("Malformed token response must not be stored"),
+    )
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return short_payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+        async def get(self, *args, **kwargs):
+            pytest.fail("Long-lived exchange must not run after malformed short-token response")
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 502
+    assert "short-token" not in response.text
+    assert "client_secret" not in response.text
+
+
+@pytest.mark.parametrize(
+    "long_payload",
+    [
+        None,
+        [],
+        "unexpected",
+        {},
+        {"access_token": []},
+        {"access_token": "long-token", "expires_in": "3600"},
+        {"access_token": "long-token", "expires_in": True},
+        {"access_token": "long-token", "expires_in": float("inf")},
+        {"access_token": "long-token", "expires_in": 10**100},
+    ],
+)
+def test_instagram_callback_rejects_malformed_long_token_payload(monkeypatch, long_payload):
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state, validate_oauth_state
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+    nonce = validate_oauth_state(state)["nonce"]
+    monkeypatch.setattr(instagram_oauth, "consume_oauth_state", lambda value: value == nonce)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "save_instagram_token",
+        lambda *args, **kwargs: pytest.fail("Malformed token response must not be stored"),
+    )
+
+    class FakeResponse:
+        is_error = False
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse({"access_token": "short-token", "user_id": "123456"})
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse(long_payload)
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 502
+    assert "short-token" not in response.text
+    assert "client_secret" not in response.text
