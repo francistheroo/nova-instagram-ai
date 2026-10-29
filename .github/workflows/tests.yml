@@ -15,6 +15,20 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nova_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nova_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -34,5 +48,6 @@ jobs:
           INSTAGRAM_USER_ID: ""
           INSTAGRAM_AUTOMATION_ENABLED: "false"
           NOVA_API_KEY: ""
+          TEST_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/nova_test"
           PYTHONPATH: ${{ github.workspace }}
         run: python -m pytest -q
