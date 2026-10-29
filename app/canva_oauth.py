@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
+from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import OAuthStoreError, consume_oauth_state, save_oauth_state
 from app.canva_store import CanvaStoreError, load_latest_canva_tokens, save_canva_tokens
 
@@ -108,11 +109,12 @@ async def canva_oauth_callback(
         if response.is_error:
             raise HTTPException(status_code=502, detail="Canva token exchange failed. Check the Canva app redirect URI and PKCE configuration.")
         token_payload = response.json()
-        access_token = token_payload.get("access_token") if isinstance(token_payload, dict) else None
-        if not access_token:
+        if not isinstance(token_payload, dict):
+            raise HTTPException(status_code=502, detail="Canva did not return a valid token response.")
+        access_token = token_payload.get("access_token")
+        if not isinstance(access_token, str) or not access_token.strip():
             raise HTTPException(status_code=502, detail="Canva did not return an access token.")
-        expires_in = token_payload.get("expires_in")
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in)) if isinstance(expires_in, (int, float)) and expires_in > 0 else None
+        expires_at = token_expiry_from_seconds(token_payload.get("expires_in"))
         save_canva_tokens(token_payload, expires_at=expires_at)
     except HTTPException:
         raise
@@ -150,13 +152,18 @@ async def canva_oauth_refresh(_: bool = Depends(_require_nova_key)):
         if response.is_error:
             raise HTTPException(status_code=502, detail="Canva token refresh failed. Reconnect Canva if the refresh token has been revoked or already used.")
         replacement = response.json()
-        if not isinstance(replacement, dict) or not replacement.get("access_token") or not replacement.get("refresh_token"):
+        if (
+            not isinstance(replacement, dict)
+            or not isinstance(replacement.get("access_token"), str)
+            or not replacement["access_token"].strip()
+            or not isinstance(replacement.get("refresh_token"), str)
+            or not replacement["refresh_token"].strip()
+        ):
             raise HTTPException(status_code=502, detail="Canva did not return a complete replacement token bundle.")
         # Keep the existing account key if Canva omits user_id from refresh responses.
         if current.get("user_id") and not replacement.get("user_id"):
             replacement["user_id"] = current["user_id"]
-        expires_in = replacement.get("expires_in")
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in)) if isinstance(expires_in, (int, float)) and expires_in > 0 else None
+        expires_at = token_expiry_from_seconds(replacement.get("expires_in"))
         save_canva_tokens(replacement, expires_at=expires_at)
     except HTTPException:
         raise

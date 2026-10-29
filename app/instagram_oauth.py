@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
+from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import (
     OAuthStoreError,
     consume_oauth_state,
@@ -125,10 +126,19 @@ async def instagram_oauth_callback(
             if short_response.is_error:
                 raise HTTPException(status_code=502, detail="Instagram authorization-code exchange failed.")
             short_payload = short_response.json()
+            if not isinstance(short_payload, dict):
+                raise HTTPException(status_code=502, detail="Instagram did not return a valid authorization response.")
             short_token = short_payload.get("access_token")
-            user_id = str(short_payload.get("user_id", "")).strip()
-            if not short_token or not user_id:
+            raw_user_id = short_payload.get("user_id")
+            if (
+                not isinstance(short_token, str)
+                or not short_token.strip()
+                or isinstance(raw_user_id, bool)
+                or not isinstance(raw_user_id, (str, int))
+                or not str(raw_user_id).strip()
+            ):
                 raise HTTPException(status_code=502, detail="Instagram did not return the expected authorization response.")
+            user_id = str(raw_user_id).strip()
 
             long_response = await client.get(
                 f"https://graph.instagram.com/{config['api_version']}/access_token",
@@ -141,15 +151,12 @@ async def instagram_oauth_callback(
             if long_response.is_error:
                 raise HTTPException(status_code=502, detail="Instagram long-lived token exchange failed.")
             long_payload = long_response.json()
+            if not isinstance(long_payload, dict):
+                raise HTTPException(status_code=502, detail="Instagram did not return a valid long-lived token response.")
             long_token = long_payload.get("access_token")
-            if not long_token:
+            if not isinstance(long_token, str) or not long_token.strip():
                 raise HTTPException(status_code=502, detail="Instagram did not return a long-lived access token.")
-            expires_in = long_payload.get("expires_in")
-            expires_at = (
-                datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
-                if isinstance(expires_in, (int, float)) and expires_in > 0
-                else None
-            )
+            expires_at = token_expiry_from_seconds(long_payload.get("expires_in"))
             save_instagram_token(user_id, long_token, expires_at=expires_at)
     except HTTPException:
         raise
@@ -199,14 +206,10 @@ async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=No
             raise HTTPException(status_code=502, detail="Instagram token refresh failed. Reconnect the account if the token is no longer refreshable.")
         payload = response.json()
         refreshed_token = payload.get("access_token") if isinstance(payload, dict) else None
-        expires_in = payload.get("expires_in") if isinstance(payload, dict) else None
-        if not refreshed_token:
+        if not isinstance(refreshed_token, str) or not refreshed_token.strip():
             raise HTTPException(status_code=502, detail="Instagram did not return a refreshed token.")
-        refreshed_expiry = (
-            datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
-            if isinstance(expires_in, (int, float)) and expires_in > 0
-            else expires_at
-        )
+        expires_in = payload.get("expires_in") if isinstance(payload, dict) else None
+        refreshed_expiry = token_expiry_from_seconds(expires_in, fallback=expires_at)
         save_instagram_token(
             str(stored["instagram_user_id"]),
             refreshed_token,
