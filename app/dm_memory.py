@@ -288,10 +288,10 @@ def claim_dm_event(message_id: str) -> bool:
         return result.fetchone() is not None
 
 
-def finish_dm_event(message_id: str, status: Literal["sent", "retryable"]) -> None:
+def finish_dm_event(message_id: str, status: Literal["sent", "retryable", "ignored"]) -> None:
     """Record a reply outcome; retryable failures may be claimed again."""
-    if status not in ("sent", "retryable"):
-        raise ValueError("status must be sent or retryable")
+    if status not in ("sent", "retryable", "ignored"):
+        raise ValueError("status must be sent, retryable, or ignored")
     now = datetime.now(timezone.utc)
     with _connect() as conn:
         result = conn.execute(
@@ -327,10 +327,24 @@ def initialize_schema() -> None:
             """
             CREATE TABLE IF NOT EXISTS nova_instagram_dm_events (
                 message_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'retryable')),
+                status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'retryable', 'ignored')),
                 lease_until TIMESTAMPTZ,
                 updated_at TIMESTAMPTZ NOT NULL
             )
+            """
+        )
+        # Upgrade databases created by the earlier retry-state foundation.
+        conn.execute(
+            """
+            ALTER TABLE nova_instagram_dm_events
+            DROP CONSTRAINT IF EXISTS nova_instagram_dm_events_status_check
+            """
+        )
+        conn.execute(
+            """
+            ALTER TABLE nova_instagram_dm_events
+            ADD CONSTRAINT nova_instagram_dm_events_status_check
+            CHECK (status IN ('processing', 'sent', 'retryable', 'ignored'))
             """
         )
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS nova_instagram_dm_memory_message_id_idx ON nova_instagram_dm_memory (message_id) WHERE message_id IS NOT NULL")
