@@ -81,7 +81,7 @@ async def receive_instagram_webhook(
                 text = message.get("text")
                 raw_mid = message.get("mid")
                 message_id = raw_mid if isinstance(raw_mid, str) and 0 < len(raw_mid) <= 512 else None
-                if not (isinstance(sender_id, str) and isinstance(text, str) and text.strip()):
+                if not (isinstance(sender_id, str) and sender_id.strip() and isinstance(text, str) and text.strip()):
                     continue
 
                 # A stable Meta message ID is required for safe retry claims. Without

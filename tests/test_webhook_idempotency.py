@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 import app.instagram_webhook as webhook
 from app.main import app
 
-client = TestClient(app)
 
 
 def test_duplicate_message_id_is_not_replied_to_twice(monkeypatch):
@@ -38,11 +37,12 @@ def test_duplicate_message_id_is_not_replied_to_twice(monkeypatch):
     }
     raw = json.dumps(payload).encode()
     signature = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
-    response = client.post(
-        "/webhooks/instagram",
-        content=raw,
-        headers={"X-Hub-Signature-256": signature, "Content-Type": "application/json"},
-    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhooks/instagram",
+            content=raw,
+            headers={"X-Hub-Signature-256": signature, "Content-Type": "application/json"},
+        )
 
     assert response.status_code == 200
     assert response.json()["stored_text_messages"] == 0
@@ -90,6 +90,10 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
         is_success = True
 
     class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
         async def __aenter__(self):
             return self
 
@@ -125,13 +129,14 @@ def test_retryable_ai_failure_can_be_reclaimed_and_replied_to(monkeypatch):
             headers={"X-Hub-Signature-256": signature, "Content-Type": "application/json"},
         )
 
-    first = deliver()
-    assert first.status_code == 200
-    assert first.json()["automatic_replies_sent"] == 0
-    assert finishes == [("mid.retry.1", "retryable")]
+    with TestClient(app) as client:
+        first = deliver()
+        assert first.status_code == 200
+        assert first.json()["automatic_replies_sent"] == 0
+        assert finishes == [("mid.retry.1", "retryable")]
 
-    second = deliver()
-    assert second.status_code == 200
+        second = deliver()
+        assert second.status_code == 200
     assert second.json()["automatic_replies_sent"] == 1
     assert claims == ["mid.retry.1", "mid.retry.1"]
     assert generation_calls == ["Hi NOVA", "Hi NOVA"]
