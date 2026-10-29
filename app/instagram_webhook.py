@@ -63,8 +63,13 @@ async def receive_instagram_webhook(
     stored = sent = skipped = 0
     auto_enabled = os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true"
     try:
-        for entry in payload.get("entry", []) if isinstance(payload, dict) else []:
+        entries = payload.get("entry", []) if isinstance(payload, dict) else []
+        if not isinstance(entries, list):
+            entries = []
+        for entry in entries:
             events = entry.get("messaging", []) if isinstance(entry, dict) else []
+            if not isinstance(events, list):
+                events = []
             for event in events:
                 if not isinstance(event, dict):
                     continue
