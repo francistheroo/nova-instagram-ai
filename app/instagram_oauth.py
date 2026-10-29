@@ -57,7 +57,7 @@ async def instagram_oauth_start():
         payload = validate_oauth_state(state)
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=STATE_MAX_AGE_SECONDS)
         save_oauth_state(payload["nonce"], expires_at=expires_at)
-    except (OAuthSecurityError, OAuthStoreError):
+    except (OAuthSecurityError, OAuthStoreError, psycopg.Error):
         raise HTTPException(
             status_code=503,
             detail="OAuth security or database storage is not configured correctly.",
@@ -110,8 +110,10 @@ async def instagram_oauth_callback(
         payload = validate_oauth_state(state, max_age_seconds=STATE_MAX_AGE_SECONDS)
         if not consume_oauth_state(payload["nonce"]):
             raise OAuthSecurityError("OAuth state was already used or expired.")
-    except (OAuthSecurityError, OAuthStoreError):
+    except OAuthSecurityError:
         raise HTTPException(status_code=400, detail="Instagram OAuth state is invalid, expired, or already used.") from None
+    except (OAuthStoreError, psycopg.Error):
+        raise HTTPException(status_code=503, detail="Instagram OAuth state storage is unavailable. Retry after database connectivity is restored.") from None
 
     # OAuth code exchange is performed only on the server; never return tokens to the browser.
     try:
@@ -160,10 +162,16 @@ async def instagram_oauth_callback(
             if not isinstance(long_token, str) or not long_token.strip():
                 raise HTTPException(status_code=502, detail="Instagram did not return a long-lived access token.")
             expires_at = token_expiry_from_seconds(long_payload.get("expires_in"))
-            save_instagram_token(user_id, long_token, expires_at=expires_at)
+            try:
+                save_instagram_token(user_id, long_token, expires_at=expires_at)
+            except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Instagram issued a token but NOVA could not store it securely. Restore database and encryption-key configuration, then restart the Instagram connection flow; do not retry this authorization code.",
+                ) from None
     except HTTPException:
         raise
-    except (httpx.HTTPError, ValueError, TypeError, OAuthStoreError, OAuthSecurityError):
+    except (httpx.HTTPError, ValueError, TypeError, OAuthStoreError, OAuthSecurityError, psycopg.Error):
         raise HTTPException(
             status_code=502,
             detail="Instagram connection could not be completed. Check server configuration and logs without logging secrets.",
