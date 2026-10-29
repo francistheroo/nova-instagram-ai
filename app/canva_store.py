@@ -1,5 +1,6 @@
 """Encrypted persistent storage for Canva Connect OAuth credentials."""
 import json
+from contextlib import contextmanager
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -67,3 +68,53 @@ def load_latest_canva_tokens() -> dict[str, Any] | None:
         raise CanvaStoreError("Stored Canva token bundle cannot be decrypted.") from None
     bundle["expires_at"] = row["expires_at"]
     return bundle
+
+
+# Session-level PostgreSQL advisory lock. This constant is stable across app
+# instances and does not require a schema migration or lock table.
+CANVA_REFRESH_ADVISORY_LOCK_KEY = 5642813379518752342
+
+
+class CanvaRefreshInProgress(CanvaStoreError):
+    """Raised when another worker is already rotating the Canva token."""
+
+
+@contextmanager
+def canva_refresh_lock():
+    """Exclusively guard a refresh across processes using the shared PostgreSQL DB.
+
+    The session-level lock survives commit while held, and closing this dedicated
+    connection releases it even if the provider request raises or the worker exits.
+    """
+    try:
+        conn = _connect()
+    except psycopg.Error:
+        raise CanvaStoreError("Canva refresh lock storage is unavailable.") from None
+
+    acquired = False
+    try:
+        row = conn.execute(
+            "SELECT pg_try_advisory_lock(%s) AS acquired",
+            (CANVA_REFRESH_ADVISORY_LOCK_KEY,),
+        ).fetchone()
+        conn.commit()
+        acquired = bool(row and row["acquired"])
+        if not acquired:
+            raise CanvaRefreshInProgress("A Canva token refresh is already in progress.")
+        yield
+    except psycopg.Error:
+        raise CanvaStoreError("Canva refresh lock storage is unavailable.") from None
+    finally:
+        try:
+            if acquired:
+                try:
+                    conn.execute(
+                        "SELECT pg_advisory_unlock(%s)",
+                        (CANVA_REFRESH_ADVISORY_LOCK_KEY,),
+                    )
+                    conn.commit()
+                except psycopg.Error:
+                    # Closing the dedicated session still releases the session lock.
+                    pass
+        finally:
+            conn.close()
