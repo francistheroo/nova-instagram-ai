@@ -8,6 +8,7 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 - `GET /health`: reports code-level implementation flags and whether environment values are present. It does not verify live account connectivity, permissions, or credentials. Manual token refresh and the Instagram webhook receiver are implemented; scheduled token refresh and automatic webhook subscription setup are not.
 - `POST /preview-reply`: generates an AI reply preview; it never sends it to Instagram.
+- `GET /instagram/verify`: verifies the configured Instagram profile with a live, read-only Meta API request and returns only its profile ID and username. Requires `X-NOVA-API-Key`.
 - `GET /instagram/media`: lists accessible professional-account media through Meta's API.
 - `GET /instagram/media/{media_id}/comments`: reads comments where permitted.
 - `POST /instagram/comments/{comment_id}/reply`: replies to a comment when action endpoints are enabled and the account has permission.
@@ -36,7 +37,7 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 5. Add the key as the `X-NOVA-API-Key` header when calling protected NOVA endpoints. Do not expose this key in a public browser client.
 6. Configure `IMAGE_API_BASE_URL`, `IMAGE_API_KEY`, and `IMAGE_MODEL` for an image provider that actually supports the OpenAI-compatible `/images/generations` endpoint. A text-only Groq model is not an image-generation provider.
 7. Use a publicly reachable image URL for Instagram publishing. The image-generation endpoint's returned URL may be temporary; reliable publishing usually needs persistent object storage and a public URL.
-8. Deploy and check `/health`, then test read-only `/instagram/media` before enabling any write action.
+8. Deploy and check `/health` for code/configuration flags, then use the protected read-only `/instagram/verify` and `/instagram/media` endpoints to verify Meta access before enabling any write action.
 
 ## OAuth security foundation
 
