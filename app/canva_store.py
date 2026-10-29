@@ -113,7 +113,7 @@ def _decode_canva_token_row(row: dict[str, Any]) -> dict[str, Any]:
 
     # New rows carry an authenticated account-key envelope. Also support legacy
     # rows created before this format, verifying their embedded user_id when present.
-    if decoded.get("_nova_canva_store_version") == 1:
+    if type(decoded.get("_nova_canva_store_version")) is int and decoded.get("_nova_canva_store_version") == 1:
         bundle = decoded.get("token_bundle")
         if decoded.get("account_key") != account_key or not isinstance(bundle, dict):
             raise CanvaStoreError("Stored Canva token bundle does not match its account key.")
