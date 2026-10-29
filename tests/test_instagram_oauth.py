@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import pytest
 
 from urllib.parse import parse_qs, urlparse
@@ -7,6 +9,14 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app, base_url="https://testserver")
+
+
+@pytest.fixture(autouse=True)
+def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
+    """Mock coordination for unit tests; PostgreSQL lock behavior has integration tests."""
+    from app import instagram_oauth
+
+    monkeypatch.setattr(instagram_oauth, "instagram_refresh_lock", lambda: nullcontext())
 
 
 def configure_oauth(monkeypatch):
@@ -624,3 +634,59 @@ def test_instagram_refresh_reports_save_failure_without_returning_new_token(monk
     assert response.status_code == 503
     assert "new-access-secret" not in response.text
     assert "private database error" not in response.text
+
+
+def test_instagram_refresh_returns_conflict_when_another_worker_holds_lock(monkeypatch):
+    from contextlib import contextmanager
+
+    from app import instagram_oauth
+    from app.oauth_store import InstagramRefreshInProgress
+
+    _configure_instagram_refresh(monkeypatch)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "load_latest_instagram_token",
+        lambda: pytest.fail("A busy refresh lock must not read or refresh the token"),
+    )
+
+    @contextmanager
+    def busy_lock():
+        raise InstagramRefreshInProgress("already refreshing")
+        yield
+
+    monkeypatch.setattr(instagram_oauth, "instagram_refresh_lock", busy_lock)
+    response = client.post(
+        "/oauth/instagram/refresh",
+        headers={"X-NOVA-API-Key": "refresh-test-key"},
+    )
+
+    assert response.status_code == 409
+    assert "already in progress" in response.json()["detail"]
+
+
+def test_instagram_refresh_fails_closed_if_shared_lock_is_unavailable(monkeypatch):
+    from contextlib import contextmanager
+
+    from app import instagram_oauth
+    from app.oauth_store import OAuthStoreError
+
+    _configure_instagram_refresh(monkeypatch)
+
+    @contextmanager
+    def unavailable_lock():
+        raise OAuthStoreError("private database details")
+        yield
+
+    monkeypatch.setattr(instagram_oauth, "instagram_refresh_lock", unavailable_lock)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "load_latest_instagram_token",
+        lambda: pytest.fail("Token refresh must not run without a distributed lock"),
+    )
+    response = client.post(
+        "/oauth/instagram/refresh",
+        headers={"X-NOVA-API-Key": "refresh-test-key"},
+    )
+
+    assert response.status_code == 503
+    assert "private database details" not in response.text

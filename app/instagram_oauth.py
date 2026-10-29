@@ -16,6 +16,8 @@ from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_
 from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import (
     OAuthStoreError,
+    InstagramRefreshInProgress,
+    instagram_refresh_lock,
     consume_oauth_state,
     save_instagram_token,
     save_oauth_state,
@@ -175,7 +177,7 @@ async def instagram_oauth_callback(
 
 @router.post("/refresh")
 async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=None)):
-    """Manually refresh the stored long-lived token without exposing it to the caller."""
+    """Refresh the stored long-lived token under a cross-worker PostgreSQL lock."""
     import hmac
 
     expected_key = os.getenv("NOVA_API_KEY", "").strip()
@@ -184,6 +186,23 @@ async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=No
     if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected_key):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
 
+    try:
+        with instagram_refresh_lock():
+            return await _refresh_instagram_token_locked()
+    except InstagramRefreshInProgress:
+        raise HTTPException(
+            status_code=409,
+            detail="An Instagram token refresh is already in progress. Retry after it finishes.",
+        ) from None
+    except (OAuthStoreError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Instagram refresh coordination is unavailable. Retry after database connectivity is restored.",
+        ) from None
+
+
+async def _refresh_instagram_token_locked():
+    """Perform token refresh while the shared PostgreSQL advisory lock is held."""
     try:
         stored = load_latest_instagram_token()
     except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
