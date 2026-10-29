@@ -558,3 +558,20 @@ def test_webhook_does_not_store_unicode_or_control_whitespace_only_text(monkeypa
     })
     assert response.status_code == 200
     assert response.json()["stored_text_messages"] == 0
+
+
+@pytest.mark.parametrize("message_id", ["\\n", "\\t", "  ", "\\u0000"])
+def test_webhook_rejects_control_character_message_ids_without_claiming(monkeypatch, message_id):
+    """Control-character IDs are rejected independently of the stable JSON cases."""
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: "stored")
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda *_a, **_k: pytest.fail("Invalid message ID must not be claimed"))
+    monkeypatch.setattr(webhook, "generate_dm_reply", lambda *_a, **_k: pytest.fail("Invalid message ID must not trigger reply"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{
+            "sender": {"id": "12345"},
+            "message": {"mid": message_id, "text": "Hello"},
+        }]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["automatic_replies_sent"] == 0
