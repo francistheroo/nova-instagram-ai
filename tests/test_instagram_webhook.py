@@ -409,7 +409,7 @@ def test_webhook_ignores_nonobject_message_without_crashing(monkeypatch, message
     assert response.json()["stored_text_messages"] == 0
 
 
-@pytest.mark.parametrize("text", ["", " ", "\\n\\t", None, 0])
+@pytest.mark.parametrize("text", ["", " ", "\n\t", None, 0])
 def test_webhook_ignores_blank_or_nonstring_text_without_storage(monkeypatch, text):
     monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
     monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: pytest.fail("Blank/invalid text must not be stored"))
@@ -444,3 +444,67 @@ def test_webhook_trims_text_before_storing(monkeypatch):
     assert response.status_code == 200
     assert stored == [("12345", "user", "hello NOVA", "trim-mid")]
     assert response.json()["stored_text_messages"] == 1
+
+
+@pytest.mark.parametrize("payload", [
+    None, [], "not-an-object", 7,
+])
+def test_webhook_ignores_nonobject_top_level_payload(monkeypatch, payload):
+    monkeypatch.setenv("META_APP_SECRET", "test-app-secret")
+    raw = __import__("json").dumps(payload).encode()
+    import hashlib, hmac
+    signature = hmac.new(b"test-app-secret", raw, hashlib.sha256).hexdigest()
+    response = client.post("/webhooks/instagram", content=raw, headers={"X-Hub-Signature-256": f"sha256={signature}"})
+    assert response.status_code in (200, 400)
+    assert response.status_code != 500
+
+
+@pytest.mark.parametrize("entry", [
+    None, [], "bad-entry", 42,
+])
+def test_webhook_ignores_nonobject_entry_without_crashing(monkeypatch, entry):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    response = _post_signed_payload(monkeypatch, {"entry": [entry]})
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("messaging", [
+    None, {}, "bad-messaging", 42,
+])
+def test_webhook_ignores_nonlist_messaging_without_crashing(monkeypatch, messaging):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    response = _post_signed_payload(monkeypatch, {"entry": [{"messaging": messaging}]})
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("event", [
+    None, "bad-event", 42,
+])
+def test_webhook_ignores_nonobject_messaging_event(monkeypatch, event):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    response = _post_signed_payload(monkeypatch, {"entry": [{"messaging": [event]}]})
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("timestamp", ["not-a-number", {}, [], True])
+def test_webhook_ignores_malformed_timestamp_types(monkeypatch, timestamp):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setattr(webhook, "generate_dm_reply", lambda *_a, **_k: pytest.fail("Malformed timestamp must not trigger reply"))
+    response = _post_signed_payload(monkeypatch, _timestamp_payload(timestamp, f"bad-type-{type(timestamp).__name__}"))
+    assert response.status_code == 200
+    assert response.json()["automatic_replies_sent"] == 0
+
+
+@pytest.mark.parametrize("message_id", [None, "", 123, [], {}])
+def test_webhook_ignores_missing_or_invalid_message_id_for_reply_claim(monkeypatch, message_id):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda *_a, **_k: pytest.fail("Invalid message ID must not be claimed"))
+    monkeypatch.setattr(webhook, "generate_dm_reply", lambda *_a, **_k: pytest.fail("Invalid message ID must not trigger reply"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{
+            "sender": {"id": "12345"},
+            "message": {"mid": message_id, "text": "Hello"},
+        }]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["automatic_replies_sent"] == 0
