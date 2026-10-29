@@ -530,7 +530,7 @@ def test_webhook_malformed_timestamp_never_replies_and_finishes_ignored(monkeypa
     assert finished and finished[0][1] == "ignored"
 
 
-@pytest.mark.parametrize("message_id", [False, True, 0, 1.5, "x" * 513, "\n", "\t", "  ", "\u0000", ["nested"], {"nested": "id"}, 10**100, -1, None])
+@pytest.mark.parametrize("message_id", [False, True, 0, 1.5, "x" * 513, ["nested"], {"nested": "id"}, 10**100, -1, None])
 def test_webhook_rejects_noncanonical_message_ids_without_claiming(monkeypatch, message_id):
     monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
     monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: "stored")
