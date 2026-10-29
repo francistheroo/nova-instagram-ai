@@ -693,8 +693,6 @@ def test_instagram_refresh_fails_closed_if_shared_lock_is_unavailable(monkeypatc
 
 
 def test_oauth_callback_reports_state_storage_outage_as_service_unavailable(monkeypatch):
-    from contextlib import nullcontext
-
     from app import instagram_oauth
     from app.oauth_security import create_oauth_state
     from app.oauth_store import OAuthStoreError
@@ -777,3 +775,27 @@ def test_instagram_callback_maps_token_storage_failure_to_safe_503(monkeypatch):
     assert "short-token-secret" not in response.text
     assert "long-token-secret" not in response.text
     assert "do not retry this authorization code" in response.json()["detail"]
+
+
+def test_instagram_callback_maps_raw_postgres_state_error_to_503(monkeypatch):
+    import psycopg
+
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+
+    def unavailable_state_storage(_nonce):
+        raise psycopg.OperationalError("private database failure")
+
+    monkeypatch.setattr(instagram_oauth, "consume_oauth_state", unavailable_state_storage)
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert "private database failure" not in response.text
