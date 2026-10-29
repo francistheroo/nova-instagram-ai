@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
+import psycopg
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
@@ -175,49 +176,91 @@ async def instagram_oauth_callback(
 @router.post("/refresh")
 async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=None)):
     """Manually refresh the stored long-lived token without exposing it to the caller."""
-    expected_key = os.getenv("NOVA_API_KEY", "")
+    import hmac
+
+    expected_key = os.getenv("NOVA_API_KEY", "").strip()
     if not expected_key:
         raise HTTPException(status_code=503, detail="NOVA_API_KEY is not configured.")
-    import hmac
     if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected_key):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
 
     try:
         stored = load_latest_instagram_token()
-    except (OAuthStoreError, OAuthSecurityError):
-        raise HTTPException(status_code=503, detail="Instagram token storage is unavailable or cannot decrypt the stored token.") from None
+    except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Instagram token storage is unavailable or cannot decrypt the stored token.",
+        ) from None
     if not stored:
         raise HTTPException(status_code=404, detail="No OAuth-connected Instagram account was found.")
+    if not isinstance(stored, dict):
+        raise HTTPException(status_code=503, detail="Stored Instagram credentials are malformed. Reconnect Instagram.")
+
+    token = stored.get("access_token")
+    user_id = stored.get("instagram_user_id")
+    if not isinstance(token, str) or not token.strip() or not isinstance(user_id, str) or not user_id.strip():
+        raise HTTPException(status_code=503, detail="Stored Instagram credentials are incomplete. Reconnect Instagram.")
 
     expires_at = stored.get("expires_at")
-    if expires_at is not None and expires_at <= datetime.now(timezone.utc):
-        raise HTTPException(status_code=409, detail="The stored token has expired. Reconnect Instagram instead of trying to refresh it.")
+    now = datetime.now(timezone.utc)
+    if expires_at is not None:
+        if not isinstance(expires_at, datetime) or expires_at.tzinfo is None:
+            raise HTTPException(status_code=503, detail="Stored Instagram token expiry is invalid. Reconnect Instagram.")
+        if expires_at <= now:
+            raise HTTPException(status_code=409, detail="The stored token has expired. Reconnect Instagram instead of trying to refresh it.")
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.get(
-                f"https://graph.instagram.com/refresh_access_token",
+                "https://graph.instagram.com/refresh_access_token",
                 params={
                     "grant_type": "ig_refresh_token",
-                    "access_token": stored["access_token"],
+                    "access_token": token,
                 },
             )
         if response.is_error:
-            raise HTTPException(status_code=502, detail="Instagram token refresh failed. Reconnect the account if the token is no longer refreshable.")
+            if response.status_code in (400, 401, 403):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Instagram rejected the stored token. Reconnect Instagram and authorize the account again.",
+                )
+            if response.status_code == 429:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Instagram temporarily rate-limited token refresh. Try again later.",
+                )
+            raise HTTPException(
+                status_code=502,
+                detail="Instagram token refresh failed because the provider is temporarily unavailable. Try again later.",
+            )
+
         payload = response.json()
-        refreshed_token = payload.get("access_token") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=502, detail="Instagram returned an invalid token-refresh response.")
+        refreshed_token = payload.get("access_token")
         if not isinstance(refreshed_token, str) or not refreshed_token.strip():
             raise HTTPException(status_code=502, detail="Instagram did not return a refreshed token.")
-        expires_in = payload.get("expires_in") if isinstance(payload, dict) else None
+        expires_in = payload.get("expires_in")
         refreshed_expiry = token_expiry_from_seconds(expires_in, fallback=expires_at)
-        save_instagram_token(
-            str(stored["instagram_user_id"]),
-            refreshed_token,
-            expires_at=refreshed_expiry,
-        )
     except HTTPException:
         raise
-    except (httpx.HTTPError, ValueError, TypeError, OAuthStoreError, OAuthSecurityError):
-        raise HTTPException(status_code=502, detail="Token refresh could not be completed. Check server configuration without logging secrets.") from None
+    except (httpx.HTTPError, ValueError, TypeError, OverflowError):
+        raise HTTPException(
+            status_code=502,
+            detail="Instagram token refresh could not be completed. Try again later; credentials were not returned.",
+        ) from None
 
-    return {"status": "refreshed", "instagram_user_id": str(stored["instagram_user_id"]), "expires_at": refreshed_expiry.isoformat() if refreshed_expiry else None, "token_returned": False}
+    try:
+        save_instagram_token(user_id, refreshed_token, expires_at=refreshed_expiry)
+    except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Instagram returned a refreshed token but NOVA could not save it securely. Check database and encryption-key configuration before retrying.",
+        ) from None
+
+    return {
+        "status": "refreshed",
+        "instagram_user_id": user_id,
+        "expires_at": refreshed_expiry.isoformat() if refreshed_expiry else None,
+        "token_returned": False,
+    }
