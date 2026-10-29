@@ -94,3 +94,67 @@ def test_ai_failure_can_retry_even_when_user_message_was_already_stored(monkeypa
         ("mid.retry.1", "sent"),
     ]
     assert len(claims) == 2
+
+
+
+def test_meta_send_failure_can_retry_same_message(monkeypatch):
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "test-token")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "ig-user-1")
+
+    finishes = []
+    user_store_count = {"value": 0}
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda mid: True)
+    monkeypatch.setattr(
+        webhook, "finish_dm_event",
+        lambda mid, status: finishes.append((mid, status)),
+    )
+
+    def store(recipient_id, role, message, message_id=None):
+        if role == "user":
+            user_store_count["value"] += 1
+            # The same inbound message is already in memory on the retry.
+            if user_store_count["value"] == 2:
+                return None
+        return "stored"
+
+    monkeypatch.setattr(webhook, "store_dm_message", store)
+
+    async def generate(*args):
+        return "Hello! How can I help?"
+
+    monkeypatch.setattr(webhook, "generate_dm_reply", generate)
+
+    class Response:
+        def __init__(self, is_success):
+            self.is_success = is_success
+
+    class FakeClient:
+        def __init__(self):
+            self.responses = [Response(False), Response(True)]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return self.responses.pop(0)
+
+    fake_client = FakeClient()
+    monkeypatch.setattr(webhook.httpx, "AsyncClient", lambda **kwargs: fake_client)
+
+    first = post_event(secret)
+    second = post_event(secret)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["automatic_replies_sent"] == 0
+    assert second.json()["automatic_replies_sent"] == 1
+    assert finishes == [
+        ("mid.retry.1", "retryable"),
+        ("mid.retry.1", "sent"),
+    ]
