@@ -3,6 +3,7 @@ import os
 from typing import Any
 
 import httpx
+import psycopg
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -28,7 +29,7 @@ class CanvaExportRequest(BaseModel):
 def _canva_token() -> str:
     try:
         bundle = load_latest_canva_tokens()
-    except CanvaStoreError:
+    except (CanvaStoreError, psycopg.Error):
         raise HTTPException(status_code=503, detail="Canva token storage is unavailable or could not be decrypted.") from None
     if not bundle:
         raise HTTPException(status_code=503, detail="Canva is not connected. Complete /oauth/canva/start first.")
