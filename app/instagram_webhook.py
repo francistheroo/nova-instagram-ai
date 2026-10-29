@@ -98,6 +98,10 @@ async def receive_instagram_webhook(
                     stored_until = store_dm_message(
                         sender_id, "user", text.strip(), message_id=message_id
                     )
+                except RuntimeError:
+                    # Preserve storage-unavailable errors for the outer handler,
+                    # which returns the specific HTTP 503 response.
+                    raise
                 except Exception:
                     # Ask Meta to redeliver failed storage work instead of
                     # acknowledging the delivery as successfully processed.
