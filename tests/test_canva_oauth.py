@@ -678,3 +678,21 @@ def test_canva_callback_maps_raw_postgres_state_error_to_503(monkeypatch):
 
     assert response.status_code == 503
     assert "private database failure" not in response.text
+
+
+def test_canva_api_maps_raw_database_failure_to_service_unavailable(monkeypatch):
+    import psycopg
+
+    from app import canva_api
+
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setattr(
+        canva_api,
+        "load_latest_canva_tokens",
+        lambda: (_ for _ in ()).throw(psycopg.OperationalError("private database endpoint")),
+    )
+
+    response = client.get("/canva/designs", headers={"X-NOVA-API-Key": "test-secret"})
+
+    assert response.status_code == 503
+    assert "private database endpoint" not in response.text
