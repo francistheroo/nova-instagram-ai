@@ -153,10 +153,14 @@ def test_oauth_callback_rejects_replayed_persisted_state_before_exchange(monkeyp
     state = create_oauth_state()
     monkeypatch.setattr(instagram_oauth, "consume_oauth_state", lambda nonce: False)
 
-    async def should_not_exchange(*args, **kwargs):
-        pytest.fail("A replayed OAuth state must not exchange the code")
+    class NoExchangeClient:
+        async def __aenter__(self):
+            pytest.fail("A replayed OAuth state must not exchange the code")
 
-    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: should_not_exchange())
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: NoExchangeClient())
     response = client.get(
         "/oauth/instagram/callback",
         params={"code": "fake-auth-code", "state": state},
