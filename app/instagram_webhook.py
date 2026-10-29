@@ -118,7 +118,12 @@ async def receive_instagram_webhook(
                     finish_dm_event(message_id, "ignored")
                     skipped += 1
                     continue
-                event_time = datetime.fromtimestamp(event_timestamp / 1000, tz=timezone.utc)
+                try:
+                    event_time = datetime.fromtimestamp(event_timestamp / 1000, tz=timezone.utc)
+                except (OverflowError, OSError, ValueError):
+                    finish_dm_event(message_id, "ignored")
+                    skipped += 1
+                    continue
                 age_seconds = (datetime.now(timezone.utc) - event_time).total_seconds()
                 if age_seconds < -300 or age_seconds > 24 * 60 * 60:
                     finish_dm_event(message_id, "ignored")
