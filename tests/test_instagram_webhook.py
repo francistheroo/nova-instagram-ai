@@ -530,7 +530,7 @@ def test_webhook_malformed_timestamp_never_replies_and_finishes_ignored(monkeypa
     assert finished and finished[0][1] == "ignored"
 
 
-@pytest.mark.parametrize("message_id", [False, True, 0, 1.5, "x" * 513, "\\n", "\\t", "  ", "\\u0000", ["nested"], {"nested": "id"}, 10**100, -1, None])
+@pytest.mark.parametrize("message_id", [False, True, 0, 1.5, "x" * 513, "\n", "\t", "  ", "\u0000", ["nested"], {"nested": "id"}, 10**100, -1, None])
 def test_webhook_rejects_noncanonical_message_ids_without_claiming(monkeypatch, message_id):
     monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
     monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: "stored")
@@ -546,7 +546,7 @@ def test_webhook_rejects_noncanonical_message_ids_without_claiming(monkeypatch, 
     assert response.json()["automatic_replies_sent"] == 0
 
 
-@pytest.mark.parametrize("text", ["\\r", "\\v", "\\f", "\\u00a0", "\\u2003", "\\u2028", "\\u2029", "\\u3000", "\\x1c", "\\x1d", "\\x1e", "\\x85", "\\u1680", "\\u2000", " \t\n "])
+@pytest.mark.parametrize("text", ["\r", "\v", "\f", "\u00a0", "\u2003", "\u2028", "\u2029", "\u3000", "\x1c", "\x1d", "\x1e", "\x85", "\u1680", "\u2000", " \t\n "])
 def test_webhook_does_not_store_unicode_or_control_whitespace_only_text(monkeypatch, text):
     monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
     monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: pytest.fail("Whitespace-only text must not be stored"))
