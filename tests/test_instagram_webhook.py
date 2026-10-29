@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -12,6 +13,50 @@ client = TestClient(app)
 
 def _signature(secret: str, raw: bytes) -> str:
     return "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+
+
+def _post_signed_payload(monkeypatch, payload):
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    raw = json.dumps(payload).encode()
+    return client.post(
+        "/webhooks/instagram",
+        content=raw,
+        headers={"X-Hub-Signature-256": _signature(secret, raw), "Content-Type": "application/json"},
+    )
+
+
+@pytest.mark.parametrize("payload", [
+    [],
+    None,
+    "unexpected",
+    {"entry": None},
+    {"entry": "unexpected"},
+    {"entry": [None, "unexpected", {}, {"messaging": "unexpected"}]},
+    {"entry": [{"messaging": [None, "unexpected", {"message": "not-an-object"}]}]},
+])
+def test_webhook_ignores_unsupported_payload_shapes(monkeypatch, payload):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setattr(
+        webhook,
+        "claim_dm_event",
+        lambda *_args, **_kwargs: pytest.fail("Malformed event must not claim a DM retry slot"),
+    )
+    monkeypatch.setattr(
+        webhook,
+        "store_dm_message",
+        lambda *_args, **_kwargs: pytest.fail("Malformed event must not be stored"),
+    )
+
+    response = _post_signed_payload(monkeypatch, payload)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "received": True,
+        "stored_text_messages": 0,
+        "automatic_replies_sent": 0,
+        "automatic_replies_skipped": 0,
+    }
 
 
 def test_webhook_verification_challenge(monkeypatch):
@@ -90,11 +135,10 @@ def test_webhook_stores_signed_incoming_text_only(monkeypatch):
         }]
     }
     raw = json.dumps(payload).encode()
-    signature = _signature(app_secret, raw)
     response = client.post(
         "/webhooks/instagram",
         content=raw,
-        headers={"X-Hub-Signature-256": signature, "Content-Type": "application/json"},
+        headers={"X-Hub-Signature-256": _signature(app_secret, raw), "Content-Type": "application/json"},
     )
     assert response.status_code == 200
     assert response.json()["stored_text_messages"] == 1
