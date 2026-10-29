@@ -348,6 +348,7 @@ def test_webhook_without_stable_message_id_never_attempts_auto_reply(monkeypatch
 
 def test_webhook_disabled_auto_replies_never_claim_or_generate(monkeypatch):
     monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: "stored")
     monkeypatch.setattr(webhook, "claim_dm_event", lambda *_a, **_k: pytest.fail("Disabled replies must not claim"))
     monkeypatch.setattr(webhook, "generate_dm_reply", lambda *_a, **_k: pytest.fail("Disabled replies must not generate"))
     response = _post_signed_payload(monkeypatch, _timestamp_payload(1_900_000_000_000, "disabled-reply-mid"))
@@ -380,3 +381,66 @@ def test_webhook_ignores_outside_or_invalid_timestamp_window(monkeypatch, timest
     assert response.json()["automatic_replies_sent"] == 0
     assert response.json()["automatic_replies_skipped"] == 1
     assert finished == [(f"bad-window-{timestamp}", "ignored")]
+
+
+@pytest.mark.parametrize("sender", [
+    None, [], "12345", 12345,
+])
+def test_webhook_ignores_nonobject_sender_without_crashing(monkeypatch, sender):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: pytest.fail("Invalid sender must not be stored"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{"sender": sender, "message": {"text": "Hi"}}]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+
+
+@pytest.mark.parametrize("message", [
+    None, [], "hello", 123,
+])
+def test_webhook_ignores_nonobject_message_without_crashing(monkeypatch, message):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: pytest.fail("Invalid message must not be stored"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{"sender": {"id": "12345"}, "message": message}]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+
+
+@pytest.mark.parametrize("text", ["", " ", "\\n\\t", None, 0])
+def test_webhook_ignores_blank_or_nonstring_text_without_storage(monkeypatch, text):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: pytest.fail("Blank/invalid text must not be stored"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{"sender": {"id": "12345"}, "message": {"text": text}}]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+
+
+@pytest.mark.parametrize("message", [
+    {"text": "echo", "is_echo": True},
+    {"text": "echo", "is_echo": 1},
+])
+def test_webhook_skips_echo_messages(monkeypatch, message):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_a, **_k: pytest.fail("Echo must not be stored"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{"sender": {"id": "12345"}, "message": message}]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+
+
+def test_webhook_trims_text_before_storing(monkeypatch):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    stored = []
+    monkeypatch.setattr(webhook, "store_dm_message", lambda sender, role, text, message_id=None: (stored.append((sender, role, text, message_id)) or "stored"))
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{"sender": {"id": "12345"}, "message": {"mid": "trim-mid", "text": "  hello NOVA  "}}]}],
+    })
+    assert response.status_code == 200
+    assert stored == [("12345", "user", "hello NOVA", "trim-mid")]
+    assert response.json()["stored_text_messages"] == 1
