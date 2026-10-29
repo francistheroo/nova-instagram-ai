@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 import app.instagram_webhook as webhook
 from app.main import app
 
-client = TestClient(app)
 
 
 @pytest.mark.parametrize(
@@ -61,14 +60,15 @@ def test_webhook_skips_25_unsupported_event_shapes_without_side_effects(monkeypa
         secret.encode(), raw, hashlib.sha256
     ).hexdigest()
 
-    response = client.post(
-        "/webhooks/instagram",
-        content=raw,
-        headers={
-            "X-Hub-Signature-256": signature,
-            "Content-Type": "application/json",
-        },
-    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhooks/instagram",
+            content=raw,
+            headers={
+                "X-Hub-Signature-256": signature,
+                "Content-Type": "application/json",
+            },
+        )
 
     assert response.status_code == 200
     assert response.json() == {
