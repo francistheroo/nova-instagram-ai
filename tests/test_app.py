@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -102,3 +104,45 @@ def test_verify_route_returns_profile_from_meta(monkeypatch):
     response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"})
     assert response.status_code == 200
     assert response.json() == {"connected": True, "profile_id": "123456", "username": "nova_test"}
+
+
+def test_verify_route_requires_key_configuration_before_calling_meta(monkeypatch):
+    import app.main as main_module
+
+    monkeypatch.delenv("NOVA_API_KEY", raising=False)
+
+    async def should_not_call_meta(*args, **kwargs):
+        pytest.fail("Meta must not be called when NOVA_API_KEY is not configured")
+
+    monkeypatch.setattr(main_module, "meta_request", should_not_call_meta)
+    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "anything"})
+
+    assert response.status_code == 503
+    assert "NOVA_API_KEY" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [None, [], {}, {"username": "profile-without-id"}, {"id": ""}],
+)
+def test_verify_route_rejects_malformed_meta_profile(monkeypatch, profile):
+    import app.main as main_module
+
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "123456")
+
+    async def fake_meta_request(method, path, *, params=None, data=None):
+        assert method == "GET"
+        assert path == "123456"
+        return profile
+
+    monkeypatch.setattr(main_module, "meta_request", fake_meta_request)
+    response = client.get(
+        "/instagram/verify",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Meta did not return a valid Instagram profile response."
+    assert "fake-token-for-test" not in response.text
