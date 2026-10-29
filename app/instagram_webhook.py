@@ -93,9 +93,19 @@ async def receive_instagram_webhook(
                         skipped += 1
                         continue
 
-                stored_until = store_dm_message(
-                    sender_id, "user", text.strip(), message_id=message_id
-                )
+                try:
+                    stored_until = store_dm_message(
+                        sender_id, "user", text.strip(), message_id=message_id
+                    )
+                except Exception:
+                    # Release a failed claim for prompt retry rather than waiting
+                    # for the lease to expire. Preserve the original storage error.
+                    if event_claimed and message_id:
+                        try:
+                            finish_dm_event(message_id, "retryable")
+                        except Exception:
+                            pass
+                    raise
                 if stored_until is None and not event_claimed:
                     # Already stored and not claimed for retry: duplicate delivery.
                     skipped += 1
