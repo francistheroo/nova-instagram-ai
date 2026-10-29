@@ -68,9 +68,9 @@ async def canva_oauth_start():
 @router.get("/callback")
 async def canva_oauth_callback(
     request: Request,
-    code: str | None = Query(default=None),
-    state: str | None = Query(default=None),
-    error: str | None = Query(default=None),
+    code: str | None = Query(default=None, max_length=4096),
+    state: str | None = Query(default=None, max_length=2048),
+    error: str | None = Query(default=None, max_length=200),
 ):
     if error:
         raise HTTPException(status_code=400, detail="Canva authorization was not completed.")

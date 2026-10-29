@@ -1,3 +1,5 @@
+import pytest
+
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -80,3 +82,105 @@ def test_manual_refresh_rejects_invalid_api_key(monkeypatch):
         headers={"X-NOVA-API-Key": "wrong-secret"},
     )
     assert response.status_code == 401
+
+
+def test_oauth_callback_exchanges_code_and_keeps_tokens_server_side(monkeypatch):
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state, validate_oauth_state
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+    nonce = validate_oauth_state(state)["nonce"]
+    monkeypatch.setattr(instagram_oauth, "consume_oauth_state", lambda value: value == nonce)
+
+    saved = []
+
+    def save_token(user_id, token, *, expires_at):
+        saved.append((user_id, token, expires_at))
+
+    monkeypatch.setattr(instagram_oauth, "save_instagram_token", save_token)
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+            self.is_error = False
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, *, data):
+            assert url == "https://api.instagram.com/oauth/access_token"
+            assert data["code"] == "fake-auth-code"
+            assert data["client_secret"] == "test-secret"
+            return FakeResponse({"access_token": "short-token-secret", "user_id": "123456"})
+
+        async def get(self, url, *, params):
+            assert url == "https://graph.instagram.com/v25.0/access_token"
+            assert params["access_token"] == "short-token-secret"
+            return FakeResponse({"access_token": "long-token-secret", "expires_in": 3600})
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?instagram_connected=pending_verification"
+    assert saved[0][0] == "123456"
+    assert saved[0][1] == "long-token-secret"
+    assert saved[0][2] is not None
+    assert "short-token-secret" not in response.text
+    assert "long-token-secret" not in response.text
+    assert "long-token-secret" not in response.headers["location"]
+    assert "max-age=0" in response.headers["set-cookie"].lower()
+
+
+def test_oauth_callback_rejects_replayed_persisted_state_before_exchange(monkeypatch):
+    from app import instagram_oauth
+    from app.oauth_security import create_oauth_state
+
+    configure_oauth(monkeypatch)
+    state = create_oauth_state()
+    monkeypatch.setattr(instagram_oauth, "consume_oauth_state", lambda nonce: False)
+
+    class NoExchangeClient:
+        async def __aenter__(self):
+            pytest.fail("A replayed OAuth state must not exchange the code")
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: NoExchangeClient())
+    response = client.get(
+        "/oauth/instagram/callback",
+        params={"code": "fake-auth-code", "state": state},
+        cookies={instagram_oauth.STATE_COOKIE: state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "already used" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "parameter,value",
+    [
+        ("code", "x" * 4097),
+        ("state", "x" * 2049),
+        ("error", "x" * 201),
+    ],
+)
+def test_oauth_callback_rejects_oversized_query_values(monkeypatch, parameter, value):
+    configure_oauth(monkeypatch)
+    response = client.get("/oauth/instagram/callback", params={parameter: value})
+    assert response.status_code == 422
