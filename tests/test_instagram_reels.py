@@ -1,9 +1,17 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.security as security
 
 client = TestClient(app)
 KEY = {"X-NOVA-API-Key": "test-secret"}
+ADMIN = ("nova-admin", "test-admin-password")
+
+
+def _enable_reel_writes(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", ADMIN[0])
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", ADMIN[1])
+    monkeypatch.setitem(app.dependency_overrides, security.require_master_enabled, lambda: True)
 
 
 def test_reel_routes_require_api_key(monkeypatch):
@@ -18,6 +26,7 @@ def test_reel_routes_require_api_key(monkeypatch):
 def test_reel_draft_creates_container_without_publishing(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    _enable_reel_writes(monkeypatch)
     from app import main
 
     calls = []
@@ -31,6 +40,7 @@ def test_reel_draft_creates_container_without_publishing(monkeypatch):
     response = client.post(
         "/instagram/reels/drafts",
         headers=KEY,
+        auth=ADMIN,
         json={
             "video_url": "https://example.com/reel.mp4",
             "caption": "Hello",
@@ -47,6 +57,7 @@ def test_reel_draft_creates_container_without_publishing(monkeypatch):
 
 def test_reel_draft_requires_https(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    _enable_reel_writes(monkeypatch)
     response = client.post(
         "/instagram/reels/drafts",
         headers=KEY,
@@ -64,7 +75,7 @@ def test_reel_status_is_read_only(monkeypatch):
         return {"id": "container_123", "status_code": "FINISHED", "status": "Finished"}
 
     monkeypatch.setattr(main, "meta_request", fake_request)
-    response = client.get("/instagram/reels/drafts/container_123", headers=KEY)
+    response = client.get("/instagram/reels/drafts/container_123", headers=KEY, auth=ADMIN)
     assert response.status_code == 200
     assert response.json()["publish_allowed"] is True
     assert response.json()["published"] is False
