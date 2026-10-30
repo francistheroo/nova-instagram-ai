@@ -37,6 +37,9 @@ def test_dm_reply_preview_uses_memory_but_needs_ai_config(monkeypatch):
     monkeypatch.delenv("AI_BASE_URL", raising=False)
     monkeypatch.delenv("AI_API_KEY", raising=False)
     monkeypatch.delenv("AI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.setattr(memory, "_connect", lambda: _FakeConnection())
     response = client.post(
         "/instagram/dm-memory/preview-reply",
