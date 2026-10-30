@@ -3,20 +3,32 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+
+
+def _admin_auth(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    return ("test-admin", "test-password")
+
+
 KEY = {"X-NOVA-API-Key": "test-secret"}
 
 
 def test_reel_routes_require_api_key(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     response = client.post(
         "/instagram/reels/drafts",
         json={"video_url": "https://example.com/reel.mp4", "caption": "Hello"},
+        auth=admin,
     )
     assert response.status_code == 401
 
 
 def test_reel_draft_creates_container_without_publishing(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    monkeypatch.setattr("app.instagram_reels.require_master_enabled", lambda: True)
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
     from app import main
 
@@ -31,6 +43,7 @@ def test_reel_draft_creates_container_without_publishing(monkeypatch):
     response = client.post(
         "/instagram/reels/drafts",
         headers=KEY,
+        auth=admin,
         json={
             "video_url": "https://example.com/reel.mp4",
             "caption": "Hello",
@@ -47,9 +60,11 @@ def test_reel_draft_creates_container_without_publishing(monkeypatch):
 
 def test_reel_draft_requires_https(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     response = client.post(
         "/instagram/reels/drafts",
         headers=KEY,
+        auth=admin,
         json={"video_url": "http://example.com/reel.mp4"},
     )
     assert response.status_code == 422
@@ -57,6 +72,7 @@ def test_reel_draft_requires_https(monkeypatch):
 
 def test_reel_status_is_read_only(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     from app import main
 
     async def fake_request(method, path, *, params=None, data=None):
@@ -64,7 +80,7 @@ def test_reel_status_is_read_only(monkeypatch):
         return {"id": "container_123", "status_code": "FINISHED", "status": "Finished"}
 
     monkeypatch.setattr(main, "meta_request", fake_request)
-    response = client.get("/instagram/reels/drafts/container_123", headers=KEY)
+    response = client.get("/instagram/reels/drafts/container_123", headers=KEY, auth=admin)
     assert response.status_code == 200
     assert response.json()["publish_allowed"] is True
     assert response.json()["published"] is False
@@ -72,6 +88,8 @@ def test_reel_status_is_read_only(monkeypatch):
 
 def test_reel_publish_refuses_container_not_finished(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    monkeypatch.setattr("app.instagram_reels.require_master_enabled", lambda: True)
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
     from app import main
 
@@ -83,7 +101,7 @@ def test_reel_publish_refuses_container_not_finished(monkeypatch):
 
     monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v25.0"))
     monkeypatch.setattr(main, "meta_request", fake_request)
-    response = client.post("/instagram/reels/drafts/container_123/publish", headers=KEY)
+    response = client.post("/instagram/reels/drafts/container_123/publish", headers=KEY, auth=admin)
     assert response.status_code == 409
     assert len(calls) == 1
     assert calls[0][0] == "GET"
@@ -91,6 +109,8 @@ def test_reel_publish_refuses_container_not_finished(monkeypatch):
 
 def test_reel_publish_is_explicit_and_requires_finished(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    monkeypatch.setattr("app.instagram_reels.require_master_enabled", lambda: True)
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
     from app import main
 
@@ -104,7 +124,7 @@ def test_reel_publish_is_explicit_and_requires_finished(monkeypatch):
 
     monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v25.0"))
     monkeypatch.setattr(main, "meta_request", fake_request)
-    response = client.post("/instagram/reels/drafts/container_123/publish", headers=KEY)
+    response = client.post("/instagram/reels/drafts/container_123/publish", headers=KEY, auth=admin)
     assert response.status_code == 200
     assert response.json()["published"] is True
     assert calls[-1][0:2] == ("POST", "user_123/media_publish")
