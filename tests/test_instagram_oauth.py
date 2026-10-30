@@ -20,6 +20,8 @@ def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
 
 
 def configure_oauth(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
     monkeypatch.setenv("INSTAGRAM_OAUTH_CLIENT_ID", "test-client")
     monkeypatch.setenv("INSTAGRAM_OAUTH_CLIENT_SECRET", "test-secret")
     monkeypatch.setenv("INSTAGRAM_OAUTH_REDIRECT_URI", "https://testserver/oauth/instagram/callback")
@@ -38,14 +40,14 @@ def test_oauth_start_requires_configuration(monkeypatch):
         "DATABASE_URL",
     ):
         monkeypatch.delenv(key, raising=False)
-    response = client.get("/oauth/instagram/start")
+    response = client.get("/oauth/instagram/start", auth=("nova-admin", "test-admin-password"))
     assert response.status_code == 503
 
 
 def test_oauth_start_redirects_and_sets_secure_state_cookie(monkeypatch):
     configure_oauth(monkeypatch)
     monkeypatch.setattr("app.instagram_oauth.save_oauth_state", lambda nonce, expires_at: None)
-    response = client.get("/oauth/instagram/start", follow_redirects=False)
+    response = client.get("/oauth/instagram/start", auth=("nova-admin", "test-admin-password"), follow_redirects=False)
     assert response.status_code == 302
     parsed = urlparse(response.headers["location"])
     assert parsed.scheme == "https"
