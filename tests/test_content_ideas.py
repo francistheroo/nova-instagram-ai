@@ -122,7 +122,7 @@ def test_content_ideas_rejects_malformed_ai_output(monkeypatch):
 
     monkeypatch.setattr("app.ai_router.httpx.AsyncClient", FakeClient)
 
-    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2})
+    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2}, auth=("test-user", "test-password"))
 
     assert response.status_code == 502
     assert "invalid content ideas" in response.json()["detail"]
