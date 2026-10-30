@@ -31,9 +31,14 @@ def initialize_canva_schema() -> None:
                 account_key TEXT PRIMARY KEY,
                 encrypted_token_bundle TEXT NOT NULL,
                 expires_at TIMESTAMPTZ,
+                refresh_pending BOOLEAN NOT NULL DEFAULT FALSE,
+                refresh_started_at TIMESTAMPTZ,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        # Upgrade installations created before refresh-outcome tracking.
+        conn.execute("ALTER TABLE nova_canva_tokens ADD COLUMN IF NOT EXISTS refresh_pending BOOLEAN NOT NULL DEFAULT FALSE")
+        conn.execute("ALTER TABLE nova_canva_tokens ADD COLUMN IF NOT EXISTS refresh_started_at TIMESTAMPTZ")
 
 
 def _account_key_from_bundle(
@@ -94,6 +99,8 @@ def save_canva_tokens(token_bundle: dict[str, Any], *, expires_at: datetime | No
             ON CONFLICT (account_key) DO UPDATE SET
                 encrypted_token_bundle = EXCLUDED.encrypted_token_bundle,
                 expires_at = EXCLUDED.expires_at,
+                refresh_pending = FALSE,
+                refresh_started_at = NULL,
                 updated_at = NOW()
         """, (account_key, encrypted, expires_at.astimezone(timezone.utc) if expires_at else None))
 
@@ -146,13 +153,32 @@ def load_canva_tokens(account_key: str) -> dict[str, Any] | None:
         raise CanvaStoreError("A non-empty Canva account key is required.")
     with _connect() as conn:
         row = conn.execute("""
-            SELECT account_key, encrypted_token_bundle, expires_at
+            SELECT account_key, encrypted_token_bundle, expires_at, refresh_pending
             FROM nova_canva_tokens
             WHERE account_key = %s
         """, (account_key.strip(),)).fetchone()
     if row is None:
         return None
+    if row.get("refresh_pending"):
+        raise CanvaStoreError("Canva token rotation outcome is uncertain. Reconnect Canva before using stored credentials.")
     return _decode_canva_token_row(row)
+
+
+def mark_canva_refresh_pending(account_key: str) -> None:
+    """Persist a fail-closed marker before consuming a single-use refresh token."""
+    if not isinstance(account_key, str) or not account_key.strip():
+        raise CanvaStoreError("A valid Canva account key is required before token refresh.")
+    with _connect() as conn:
+        result = conn.execute(
+            """
+            UPDATE nova_canva_tokens
+            SET refresh_pending = TRUE, refresh_started_at = NOW(), updated_at = NOW()
+            WHERE account_key = %s
+            """,
+            (account_key.strip(),),
+        )
+        if result.rowcount != 1:
+            raise CanvaStoreError("The selected Canva account could not be marked for token rotation.")
 
 
 def load_latest_canva_tokens() -> dict[str, Any] | None:
@@ -167,13 +193,15 @@ def load_latest_canva_tokens() -> dict[str, Any] | None:
 
     with _connect() as conn:
         rows = conn.execute("""
-            SELECT account_key, encrypted_token_bundle, expires_at
+            SELECT account_key, encrypted_token_bundle, expires_at, refresh_pending
             FROM nova_canva_tokens ORDER BY updated_at DESC LIMIT 2
         """).fetchall()
     if not rows:
         return None
     if len(rows) > 1:
         raise CanvaStoreError("Multiple Canva accounts are connected. Set CANVA_ACCOUNT_KEY to the intended account key.")
+    if rows[0].get("refresh_pending"):
+        raise CanvaStoreError("Canva token rotation outcome is uncertain. Reconnect Canva before using stored credentials.")
     return _decode_canva_token_row(rows[0])
 
 
