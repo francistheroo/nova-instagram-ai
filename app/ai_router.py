@@ -54,6 +54,11 @@ def _configured_providers() -> list[dict[str, str]]:
     return [providers[name] for name in order if name in providers]
 
 
+def configured_provider_names() -> list[str]:
+    """Return configured provider identifiers without exposing credentials."""
+    return [provider["name"] for provider in _configured_providers()]
+
+
 async def chat_completion(
     messages: list[dict[str, str]],
     *,
