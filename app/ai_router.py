@@ -93,7 +93,7 @@ async def chat_completion(
                 failures.append(f"{provider['name']}:{response.status_code}")
                 if response.status_code == 429:
                     try:
-                        cooldown = max(30, min(900, int(response.headers.get('Retry-After', '60'))))
+                        cooldown = max(30, min(900, int(getattr(response, 'headers', {}).get('Retry-After', '60'))))
                     except (ValueError, TypeError):
                         cooldown = 60
                     _provider_cooldowns[provider['name']] = time.monotonic() + cooldown
