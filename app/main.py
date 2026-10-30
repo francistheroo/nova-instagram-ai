@@ -1,5 +1,6 @@
 import os
 import asyncio
+import hmac
 from typing import Optional, Any
 from datetime import datetime, timezone
 
@@ -101,7 +102,7 @@ def require_nova_key(x_nova_api_key: Optional[str] = Header(default=None)):
             status_code=503,
             detail="Set NOVA_API_KEY in Render environment variables before using action endpoints.",
         )
-    if not x_nova_api_key or x_nova_api_key != expected:
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
 
@@ -310,14 +311,14 @@ async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
 
 
 @app.post("/instagram/comments/{comment_id}/reply")
-async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool = Depends(require_nova_key)):
+async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Instagram actions are disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after testing and authorization.")
     return await meta_request("POST", f"{comment_id}/replies", data={"message": body.message})
 
 
 @app.post("/instagram/messages/reply")
-async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_nova_key)):
+async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
     """Send a reply to an eligible Instagram-scoped recipient ID after Meta messaging authorization."""
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Instagram actions are disabled. Enable only after testing and authorization.")
