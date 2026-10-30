@@ -50,6 +50,7 @@ def test_dm_reply_preview_uses_memory_but_needs_ai_config(monkeypatch):
         "/instagram/dm-memory/preview-reply",
         headers={"X-NOVA-API-Key": "test-secret"},
         json={"recipient_id": "123456", "message": "What did I say?"},
+        auth=("test-user", "test-password"),
     )
     assert response.status_code == 503
     assert "AI providers are unavailable" in response.json()["detail"]
