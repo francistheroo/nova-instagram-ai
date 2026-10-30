@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.security as security
 from app.main import app
 
 
@@ -23,6 +24,7 @@ def test_ai_endpoint_fails_closed_when_master_switch_is_off(monkeypatch):
     monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-only-password")
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(security, "master_enabled", lambda: False)
     response = TestClient(app).post(
         "/ai/generate-caption",
         auth=("nova-admin", "test-only-password"),
