@@ -82,7 +82,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-async def admin_page():
+async def admin_page(_: bool = Depends(require_admin)):
     return HTMLResponse("""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NOVA Admin</title>
 <style>
 body{margin:0;background:#050505;color:#eee;font:15px system-ui}main{max-width:720px;margin:32px auto;padding:18px}.card{background:#111;border:1px solid #292929;border-radius:16px;padding:20px;margin:14px 0}h1{color:#8cffc7}label{display:block;margin:12px 0 5px}input{background:#080808;color:white;border:1px solid #444;border-radius:9px;padding:11px;width:100%;box-sizing:border-box}input[type=checkbox]{width:auto}button{background:#8cffc7;color:#06110a;border:0;border-radius:10px;padding:12px 18px;font-weight:bold;width:100%}.hint,#status{color:#aaa;font-size:13px}
