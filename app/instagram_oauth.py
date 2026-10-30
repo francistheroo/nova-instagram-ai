@@ -9,7 +9,9 @@ from urllib.parse import urlencode
 
 import httpx
 import psycopg
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+
+from app.security import require_user
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
@@ -49,7 +51,7 @@ def _config() -> dict[str, str]:
 
 
 @router.get("/start")
-async def instagram_oauth_start():
+async def instagram_oauth_start(_: bool = Depends(require_user)):
     """Create and persist OAuth state, then redirect the browser to Instagram."""
     config = _config()
     try:
@@ -184,7 +186,7 @@ async def instagram_oauth_callback(
 
 
 @router.post("/refresh")
-async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=None)):
+async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=None), _: bool = Depends(require_user)):
     """Refresh the stored long-lived token under a cross-worker PostgreSQL lock."""
     import hmac
 

@@ -1,10 +1,13 @@
 """Protected server-side Canva Connect API endpoints for designs and exports."""
 import os
+import hmac
 from typing import Any
 
 import httpx
 import psycopg
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+
+from app.security import require_user
 from pydantic import BaseModel, Field
 
 from app.canva_store import CanvaStoreError, load_latest_canva_tokens
@@ -16,7 +19,7 @@ def require_nova_key(x_nova_api_key: str | None = Header(default=None)):
     expected = os.getenv("NOVA_API_KEY", "")
     if not expected:
         raise HTTPException(status_code=503, detail="Set NOVA_API_KEY in server environment before using Canva action endpoints.")
-    if not x_nova_api_key or x_nova_api_key != expected:
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
 
@@ -72,6 +75,7 @@ async def list_canva_designs(
     continuation: str | None = Query(default=None, max_length=2048),
     limit: int = Query(default=25, ge=1, le=100),
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """List designs available to the connected Canva user."""
     params: dict[str, Any] = {"limit": limit, "sort_by": "modified_descending"}
@@ -86,6 +90,7 @@ async def list_canva_designs(
 async def canva_export_formats(
     design_id: str,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Return formats Canva says are available for this design."""
     if not design_id or len(design_id) > 200 or not all(ch.isalnum() or ch in "_-" for ch in design_id):
@@ -97,6 +102,7 @@ async def canva_export_formats(
 async def create_canva_export(
     body: CanvaExportRequest,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Start an asynchronous export job; this does not download the file."""
     return await _canva_request(
@@ -110,6 +116,7 @@ async def create_canva_export(
 async def get_canva_export(
     job_id: str,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Check an export job; Canva download URLs are temporary and must be handled securely."""
     if not job_id or len(job_id) > 200 or not all(ch.isalnum() or ch in "_-" for ch in job_id):

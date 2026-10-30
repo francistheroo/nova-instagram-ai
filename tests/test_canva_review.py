@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -5,8 +6,33 @@ from app.main import app
 client = TestClient(app)
 
 
+
+@pytest.fixture(autouse=True)
+def authenticate_admin_requests(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    original_request = client.request
+
+    def authenticated_request(method, url, *args, **kwargs):
+        headers = dict(kwargs.get("headers") or {})
+        headers.setdefault("Authorization", "Basic dGVzdC1hZG1pbjp0ZXN0LXBhc3N3b3Jk")
+        kwargs["headers"] = headers
+        kwargs.pop("auth", None)
+        return original_request(method, url, *args, **kwargs)
+
+    monkeypatch.setattr(client, "request", authenticated_request)
+
+
+def _admin_auth(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    return ("test-admin", "test-password")
+
+
+
 def test_canva_instagram_draft_export_requires_key(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     response = client.post(
         "/canva/instagram-draft-exports",
         json={"design_id": "design_123", "target": "post", "caption": "Hello"},
@@ -121,6 +147,8 @@ def test_canva_draft_export_rejects_invalid_job_id(monkeypatch):
 def test_canva_mp4_export_creates_reel_container_without_publishing(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.setattr("app.canva_review.require_master_enabled", lambda: True)
+    monkeypatch.setattr("app.canva_review.require_master_enabled", lambda: True)
     from app import canva_review, main
 
     async def fake_canva_request(method, path, *, params=None, json_body=None):
@@ -162,6 +190,7 @@ def test_canva_mp4_export_creates_reel_container_without_publishing(monkeypatch)
 def test_canva_export_must_be_successful_before_reel_draft(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.setattr("app.canva_review.require_master_enabled", lambda: True)
     from app import canva_review
 
     async def fake_canva_request(method, path, *, params=None, json_body=None):

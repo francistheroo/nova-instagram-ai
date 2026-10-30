@@ -6,6 +6,7 @@ on writes and excluded from reads. This module does not itself subscribe to
 Meta webhooks or fetch DMs.
 """
 import os
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -35,7 +36,7 @@ def _connect():
 
 def _require_nova_key(x_nova_api_key: str | None = Header(default=None, alias="X-NOVA-API-Key")):
     expected = os.getenv("NOVA_API_KEY", "")
-    if not expected or not x_nova_api_key or x_nova_api_key != expected:
+    if not expected or not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="A valid X-NOVA-API-Key is required.")
 
 
@@ -155,7 +156,7 @@ class DMMemoryMessage(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
 
-@router.post("/instagram/dm-memory/messages", dependencies=[Depends(_require_nova_key)])
+@router.post("/instagram/dm-memory/messages", dependencies=[Depends(_require_nova_key), Depends(require_user)])
 def remember_dm_message(body: DMMemoryMessage):
     """Store one conversation turn with a strict 12-hour expiry."""
     now = datetime.now(timezone.utc)
@@ -182,7 +183,7 @@ def remember_dm_message(body: DMMemoryMessage):
     }
 
 
-@router.get("/instagram/dm-memory/{recipient_id}", dependencies=[Depends(_require_nova_key)])
+@router.get("/instagram/dm-memory/{recipient_id}", dependencies=[Depends(_require_nova_key), Depends(require_user)])
 def get_dm_memory(recipient_id: str):
     """Return recent context only; expired messages are never included."""
     if not recipient_id or len(recipient_id) > 128 or not all(c.isalnum() or c in "_.:-" for c in recipient_id):
@@ -219,7 +220,7 @@ def get_dm_memory(recipient_id: str):
     }
 
 
-@router.delete("/instagram/dm-memory/{recipient_id}", dependencies=[Depends(_require_nova_key)])
+@router.delete("/instagram/dm-memory/{recipient_id}", dependencies=[Depends(_require_nova_key), Depends(require_user)])
 def clear_dm_memory(recipient_id: str):
     """Explicitly clear a conversation's stored context."""
     if not recipient_id or len(recipient_id) > 128 or not all(c.isalnum() or c in "_.:-" for c in recipient_id):

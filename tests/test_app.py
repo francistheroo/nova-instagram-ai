@@ -9,6 +9,12 @@ from app.main import app
 client = TestClient(app)
 
 
+def _admin_auth(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    return ("test-admin", "test-password")
+
+
 def test_root_is_online():
     response = client.get("/")
     assert response.status_code == 200
@@ -65,11 +71,13 @@ def test_protected_media_route_rejects_missing_key(monkeypatch):
 
 def test_protected_media_route_requires_instagram_configuration(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     monkeypatch.delenv("INSTAGRAM_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("INSTAGRAM_USER_ID", raising=False)
     response = client.get(
         "/instagram/media",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=admin,
     )
     assert response.status_code == 503
     assert "not connected" in response.json()["detail"]
@@ -77,11 +85,13 @@ def test_protected_media_route_requires_instagram_configuration(monkeypatch):
 
 def test_write_action_stays_disabled_by_default(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     monkeypatch.delenv("INSTAGRAM_AUTOMATION_ENABLED", raising=False)
     response = client.post(
         "/instagram/comments/123/reply",
         headers={"X-NOVA-API-Key": "test-secret"},
         json={"message": "Thanks for commenting!"},
+        auth=admin,
     )
     assert response.status_code == 403
     assert "disabled" in response.json()["detail"]
@@ -90,7 +100,8 @@ def test_write_action_stays_disabled_by_default(monkeypatch):
 
 def test_verify_route_requires_api_key(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
-    response = client.get("/instagram/verify")
+    admin = _admin_auth(monkeypatch)
+    response = client.get("/instagram/verify", auth=admin)
     assert response.status_code == 401
 
 
@@ -98,6 +109,7 @@ def test_verify_route_returns_profile_from_meta(monkeypatch):
     import app.main as main_module
 
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "fake-token-for-test")
     monkeypatch.setenv("INSTAGRAM_USER_ID", "123456")
 
@@ -108,7 +120,7 @@ def test_verify_route_returns_profile_from_meta(monkeypatch):
         return {"id": "123456", "username": "nova_test"}
 
     monkeypatch.setattr(main_module, "meta_request", fake_meta_request)
-    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"})
+    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"}, auth=admin)
     assert response.status_code == 200
     assert response.json() == {"connected": True, "profile_id": "123456", "username": "nova_test"}
 
@@ -117,12 +129,13 @@ def test_verify_route_requires_key_configuration_before_calling_meta(monkeypatch
     import app.main as main_module
 
     monkeypatch.delenv("NOVA_API_KEY", raising=False)
+    admin = _admin_auth(monkeypatch)
 
     async def should_not_call_meta(*args, **kwargs):
         pytest.fail("Meta must not be called when NOVA_API_KEY is not configured")
 
     monkeypatch.setattr(main_module, "meta_request", should_not_call_meta)
-    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "anything"})
+    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "anything"}, auth=admin)
 
     assert response.status_code == 503
     assert "NOVA_API_KEY" in response.json()["detail"]
@@ -136,6 +149,7 @@ def test_verify_route_rejects_malformed_meta_profile(monkeypatch, profile):
     import app.main as main_module
 
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "fake-token-for-test")
     monkeypatch.setenv("INSTAGRAM_USER_ID", "123456")
 
@@ -148,8 +162,59 @@ def test_verify_route_rejects_malformed_meta_profile(monkeypatch, profile):
     response = client.get(
         "/instagram/verify",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=admin,
     )
 
     assert response.status_code == 502
     assert response.json()["detail"] == "Meta did not return a valid Instagram profile response."
     assert "fake-token-for-test" not in response.text
+
+
+def test_instagram_api_requires_admin_even_with_service_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    _admin_auth(monkeypatch)
+    response = client.get(
+        "/instagram/media",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+    assert response.status_code == 401
+
+
+def test_instagram_media_id_rejects_path_injection(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    response = client.get(
+        "/instagram/media/bad%3Fid/comments",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        auth=admin,
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid media ID."
+
+
+def test_manual_comment_reply_obeys_ai_master_switch(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    response = client.post(
+        "/instagram/comments/123/reply",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"message": "Thanks for commenting!"},
+        auth=admin,
+    )
+    assert response.status_code == 503
+    assert "master switch is OFF" in response.json()["detail"]
+
+
+def test_message_reply_rejects_invalid_recipient_id(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    response = client.post(
+        "/instagram/messages/reply",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"recipient_id": "123/456", "message": "Hello"},
+        auth=admin,
+    )
+    assert response.status_code == 422

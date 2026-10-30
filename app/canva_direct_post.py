@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.canva_api import _canva_request, require_nova_key
+from app.security import require_user, require_master_enabled
 
 router = APIRouter(prefix="/canva", tags=["Canva direct publishing"])
 
@@ -41,9 +42,11 @@ def _require_actions_enabled() -> None:
 async def publish_canva_photo_direct(
     body: DirectPostPublishRequest,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Export a Canva design as PNG and publish it as an Instagram photo post."""
     _require_actions_enabled()
+    require_master_enabled()
     formats_payload = await _canva_request("GET", f"designs/{body.design_id}/export-formats")
     available = _available_format_types(formats_payload)
     if "png" not in available:
