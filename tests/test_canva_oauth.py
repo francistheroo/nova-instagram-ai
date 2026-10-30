@@ -17,10 +17,12 @@ client = TestClient(app)
 
 
 def test_canva_oauth_start_requires_server_configuration(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
     monkeypatch.delenv("CANVA_CLIENT_ID", raising=False)
     monkeypatch.delenv("CANVA_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("CANVA_REDIRECT_URI", raising=False)
-    response = client.get("/oauth/canva/start")
+    response = client.get("/oauth/canva/start", auth=("nova-admin", "test-admin-password"))
     assert response.status_code == 503
 
 
