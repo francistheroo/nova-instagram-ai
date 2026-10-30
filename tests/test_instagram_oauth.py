@@ -801,3 +801,12 @@ def test_instagram_callback_maps_raw_postgres_state_error_to_503(monkeypatch):
 
     assert response.status_code == 503
     assert "private database failure" not in response.text
+
+
+def test_instagram_oauth_start_requires_admin_login(monkeypatch):
+    configure_oauth(monkeypatch)
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    response = client.get("/oauth/instagram/start", follow_redirects=False)
+    assert response.status_code == 401
+
