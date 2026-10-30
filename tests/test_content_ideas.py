@@ -11,11 +11,14 @@ def test_content_ideas_requires_ai_configuration(monkeypatch):
     monkeypatch.delenv("AI_BASE_URL", raising=False)
     monkeypatch.delenv("AI_API_KEY", raising=False)
     monkeypatch.delenv("AI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
 
     response = client.post("/ai/content-ideas", json={"topic": "Kerala food"})
 
     assert response.status_code == 503
-    assert "not configured" in response.json()["detail"]
+    assert "AI providers are unavailable" in response.json()["detail"]
 
 
 def test_content_ideas_rejects_out_of_range_count():
