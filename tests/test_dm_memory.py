@@ -17,11 +17,14 @@ def test_dm_memory_requires_nova_api_key(monkeypatch):
 
 def test_dm_memory_fails_closed_without_database(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     response = client.post(
         "/instagram/dm-memory/messages",
         headers={"X-NOVA-API-Key": "test-secret"},
         json={"recipient_id": "123456", "role": "user", "message": "Hello"},
+        auth=("test-admin", "test-password"),
     )
     assert response.status_code == 503
     assert response.json()["detail"] == "DATABASE_URL is not configured."
@@ -33,8 +36,22 @@ def test_dm_memory_has_twelve_hour_ttl():
 
 def test_dm_memory_rejects_invalid_recipient_id(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     response = client.get(
         "/instagram/dm-memory/bad%2Fid",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("test-admin", "test-password"),
     )
     assert response.status_code in (404, 422)
+
+
+
+def test_dm_memory_requires_admin_login_even_with_service_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    response = client.get(
+        "/instagram/dm-memory/123456",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+    assert response.status_code == 503 or response.status_code == 401
+    assert response.status_code == 401
