@@ -129,3 +129,29 @@ def test_reel_publish_is_explicit_and_requires_finished(monkeypatch):
     assert response.json()["published"] is True
     assert calls[-1][0:2] == ("POST", "user_123/media_publish")
     assert calls[-1][3] == {"creation_id": "container_123"}
+
+
+def test_reel_routes_require_admin_even_with_service_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    _admin_auth(monkeypatch)
+    response = client.get(
+        "/instagram/reels/drafts/container_123",
+        headers=KEY,
+    )
+    assert response.status_code == 401
+
+
+def test_reel_draft_obeys_master_switch(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    response = client.post(
+        "/instagram/reels/drafts",
+        headers=KEY,
+        auth=admin,
+        json={"video_url": "https://example.com/reel.mp4"},
+    )
+    assert response.status_code == 503
+    assert "master switch is OFF" in response.json()["detail"]
