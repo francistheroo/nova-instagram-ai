@@ -9,11 +9,13 @@ from app.main import app
 @pytest.fixture(autouse=True)
 def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
     """Unit tests mock token storage/provider calls and do not need PostgreSQL."""
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     from app import canva_oauth
 
     monkeypatch.setattr(canva_oauth, "canva_refresh_lock", lambda: nullcontext())
 
-client = TestClient(app)
+client = TestClient(app, auth=("test-admin", "test-password"))
 
 
 def test_canva_oauth_start_requires_server_configuration(monkeypatch):
