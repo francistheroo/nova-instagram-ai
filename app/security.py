@@ -8,20 +8,20 @@ from fastapi import Header, HTTPException
 
 
 def require_user(authorization: str | None = Header(default=None)):
-    expected_user = os.getenv("NOVA_USER_USERNAME", "").strip()
-    expected_password = os.getenv("NOVA_USER_PASSWORD", "")
+    expected_user = os.getenv("NOVA_ADMIN_USERNAME", "").strip()
+    expected_password = os.getenv("NOVA_ADMIN_PASSWORD", "")
     if not expected_user or not expected_password:
-        raise HTTPException(status_code=503, detail="Account login is not configured on the server.")
+        raise HTTPException(status_code=503, detail="Admin login is not configured on the server.")
     try:
         scheme, encoded = (authorization or "").split(" ", 1)
         username, password = base64.b64decode(encoded, validate=True).decode("utf-8").split(":", 1)
     except Exception:
-        raise HTTPException(status_code=401, detail="Sign in required.", headers={"WWW-Authenticate": 'Basic realm="NOVA"'}) from None
+        raise HTTPException(status_code=401, detail="Admin sign-in required.", headers={"WWW-Authenticate": 'Basic realm="NOVA"'}) from None
     if scheme.lower() != "basic" or not (
         hmac.compare_digest(username, expected_user)
         and hmac.compare_digest(password, expected_password)
     ):
-        raise HTTPException(status_code=401, detail="Invalid account credentials.", headers={"WWW-Authenticate": 'Basic realm="NOVA"'})
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.", headers={"WWW-Authenticate": 'Basic realm="NOVA"'})
     return True
 
 
