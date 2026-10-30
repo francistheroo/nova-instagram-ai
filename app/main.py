@@ -25,13 +25,14 @@ from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
 from app.auto_publisher import scheduler_loop, initialize_scheduler_schema
+from app.security import require_user, require_master_enabled, master_enabled
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
 app.include_router(instagram_oauth_router)
-app.include_router(ai_caption_router)
-app.include_router(content_ideas_router)
-app.include_router(web_ui_router)
+app.include_router(ai_caption_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
+app.include_router(content_ideas_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
+app.include_router(web_ui_router, dependencies=[Depends(require_user)])
 app.include_router(dm_memory_router)
 app.include_router(instagram_webhook_router)
 app.include_router(canva_oauth_router)
@@ -187,6 +188,7 @@ async def health():
         "instagram_webhook_subscription_automated": False,
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
         "auto_scheduler_enabled": os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true",
+        "ai_master_enabled": master_enabled(),
         "auto_scheduler_running": hasattr(app.state, "nova_scheduler_task"),
         "instagram_auto_dm_replies_enabled": os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true",
         "ai_configured": bool(configured_provider_names()),
@@ -242,7 +244,7 @@ async def integrations_status():
 
 
 @app.post("/preview-reply")
-async def preview_reply(body: ReplyRequest):
+async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __: bool = Depends(require_master_enabled)):
     """Generate a reply preview. This endpoint does not send anything to Instagram."""
     if not configured_provider_names():
         return {
@@ -331,7 +333,7 @@ async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_
 
 
 @app.post("/instagram/publish-image")
-async def publish_image(body: PublishImageRequest, _: bool = Depends(require_nova_key)):
+async def publish_image(body: PublishImageRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
     """Publish a publicly reachable image URL using Instagram's content publishing flow."""
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Publishing is disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after an authorized test.")
@@ -353,7 +355,7 @@ async def publish_image(body: PublishImageRequest, _: bool = Depends(require_nov
 
 
 @app.post("/ai/generate-image")
-async def generate_image(body: ImageGenerationRequest, _: bool = Depends(require_nova_key)):
+async def generate_image(body: ImageGenerationRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
     """Call a separately configured OpenAI-compatible image-generation API."""
     base_url = os.getenv("IMAGE_API_BASE_URL", "").rstrip("/")
     api_key = os.getenv("IMAGE_API_KEY", "")
