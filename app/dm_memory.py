@@ -6,6 +6,7 @@ on writes and excluded from reads. This module does not itself subscribe to
 Meta webhooks or fetch DMs.
 """
 import os
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
