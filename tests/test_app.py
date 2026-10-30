@@ -55,6 +55,7 @@ def test_preview_reply_uses_fallback_when_provider_not_configured(monkeypatch):
     payload = response.json()
     assert payload["mode"] == "fallback"
     assert payload["sent_to_instagram"] is False
+    app.dependency_overrides.pop(security.require_master_enabled, None)
 
 
 def test_protected_media_route_rejects_missing_key(monkeypatch):
