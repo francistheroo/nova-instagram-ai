@@ -5,9 +5,12 @@ protected publish endpoint after Meta reports the container is FINISHED.
 """
 import os
 import re
+import hmac
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, HttpUrl
+
+from app.security import require_user, require_master_enabled
 
 router = APIRouter(prefix="/instagram/reels", tags=["Instagram Reels"])
 _CONTAINER_ID = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
@@ -17,7 +20,7 @@ def _require_nova_key(x_nova_api_key: str | None = Header(default=None)):
     expected = os.getenv("NOVA_API_KEY", "")
     if not expected:
         raise HTTPException(status_code=503, detail="NOVA_API_KEY is not configured.")
-    if not x_nova_api_key or x_nova_api_key != expected:
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
 
@@ -37,11 +40,12 @@ class ReelDraftRequest(BaseModel):
 
 
 @router.post("/drafts")
-async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_nova_key)):
+async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_nova_key), __: bool = Depends(require_user)):
     """Create a Meta video container for review; this endpoint never publishes."""
     if body.video_url.scheme != "https":
         raise HTTPException(status_code=422, detail="video_url must use HTTPS.")
     _require_actions_enabled()
+    require_master_enabled()
     from app.main import instagram_config, meta_request
 
     _, user_id, _ = instagram_config()
@@ -68,7 +72,7 @@ async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_n
 
 
 @router.get("/drafts/{container_id}")
-async def get_reel_draft_status(container_id: str, _: bool = Depends(_require_nova_key)):
+async def get_reel_draft_status(container_id: str, _: bool = Depends(_require_nova_key), __: bool = Depends(require_user)):
     """Read Meta's processing status without publishing the Reel."""
     if not _CONTAINER_ID.fullmatch(container_id):
         raise HTTPException(status_code=422, detail="Invalid Reel container ID.")
@@ -89,11 +93,12 @@ async def get_reel_draft_status(container_id: str, _: bool = Depends(_require_no
 
 
 @router.post("/drafts/{container_id}/publish")
-async def publish_reel_draft(container_id: str, _: bool = Depends(_require_nova_key)):
+async def publish_reel_draft(container_id: str, _: bool = Depends(_require_nova_key), __: bool = Depends(require_user)):
     """Explicitly publish a reviewed Reel only when Meta says its container is ready."""
     if not _CONTAINER_ID.fullmatch(container_id):
         raise HTTPException(status_code=422, detail="Invalid Reel container ID.")
     _require_actions_enabled()
+    require_master_enabled()
     from app.main import instagram_config, meta_request
 
     _, user_id, _ = instagram_config()
