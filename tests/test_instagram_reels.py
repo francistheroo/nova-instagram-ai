@@ -118,7 +118,7 @@ def test_reel_publish_is_explicit_and_requires_finished(monkeypatch):
 
     monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v25.0"))
     monkeypatch.setattr(main, "meta_request", fake_request)
-    response = client.post("/instagram/reels/drafts/container_123/publish", headers=KEY)
+    response = client.post("/instagram/reels/drafts/container_123/publish", headers=KEY, auth=ADMIN)
     assert response.status_code == 200
     assert response.json()["published"] is True
     assert calls[-1][0:2] == ("POST", "user_123/media_publish")
