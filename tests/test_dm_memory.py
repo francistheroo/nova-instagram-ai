@@ -49,9 +49,10 @@ def test_dm_memory_rejects_invalid_recipient_id(monkeypatch):
 
 def test_dm_memory_requires_admin_login_even_with_service_key(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     response = client.get(
         "/instagram/dm-memory/123456",
         headers={"X-NOVA-API-Key": "test-secret"},
     )
-    assert response.status_code == 503 or response.status_code == 401
     assert response.status_code == 401
