@@ -10,12 +10,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import psycopg
-import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from psycopg.rows import dict_row
 
 from app.personality import NOVA_SYSTEM_PROMPT
+from app.ai_router import AIProviderUnavailable, chat_completion
 
 router = APIRouter()
 MEMORY_TTL = timedelta(hours=12)
@@ -85,26 +85,17 @@ async def generate_dm_reply(recipient_id: str, current_message: str) -> str:
                ORDER BY created_at DESC, id DESC LIMIT %s""",
             (recipient_id, now, MAX_MESSAGES_PER_CONVERSATION),
         ).fetchall()
-    base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
-    api_key = os.getenv("AI_API_KEY", "")
-    model = os.getenv("AI_MODEL", "")
-    if not (base_url and api_key and model):
-        raise RuntimeError("AI text provider is not configured.")
     history = list(reversed(rows))
     messages = [{"role": "system", "content": NOVA_SYSTEM_PROMPT}]
     for row in history:
         messages.append({"role": row["role"], "content": row["message"]})
     if not history or history[-1]["role"] != "user" or history[-1]["message"] != current_message:
         messages.append({"role": "user", "content": current_message})
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        response = await client.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "messages": messages, "temperature": 0.8},
-        )
-    if response.is_error:
-        raise RuntimeError("AI provider rejected the reply request.")
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        reply, _, _ = await chat_completion(messages, temperature=0.8)
+        return reply
+    except AIProviderUnavailable as exc:
+        raise RuntimeError("All configured AI providers are unavailable.") from exc
 
 
 class DMReplyPreviewRequest(BaseModel):
@@ -131,11 +122,6 @@ async def preview_dm_reply(body: DMReplyPreviewRequest):
     except psycopg.Error:
         raise HTTPException(status_code=503, detail="DM memory storage is unavailable. Check PostgreSQL setup.")
 
-    base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
-    api_key = os.getenv("AI_API_KEY", "")
-    model = os.getenv("AI_MODEL", "")
-    if not (base_url and api_key and model):
-        raise HTTPException(status_code=503, detail="AI provider is not configured.")
     history = list(reversed(rows))
     messages = [{"role": "system", "content": NOVA_SYSTEM_PROMPT}]
     for row in history:
@@ -147,22 +133,13 @@ async def preview_dm_reply(body: DMReplyPreviewRequest):
         messages.append({"role": "system", "content": f"Language preference hint: {body.language_hint}"})
 
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"model": model, "messages": messages, "temperature": 0.8},
-            )
-        if response.is_error:
-            raise HTTPException(status_code=502, detail="AI provider request failed.")
-        data = response.json()
-        reply = data["choices"][0]["message"]["content"]
-    except HTTPException:
-        raise
-    except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
-        raise HTTPException(status_code=502, detail="Could not generate a reply draft from the AI provider.")
+        reply, provider, model = await chat_completion(messages, temperature=0.8)
+    except AIProviderUnavailable:
+        raise HTTPException(status_code=503, detail="All configured AI providers are unavailable or rate-limited. Try again later.") from None
     return {
         "reply": reply,
+        "provider": provider,
+        "model": model,
         "draft_only": True,
         "sent_to_instagram": False,
         "context_messages_used": len(history),
