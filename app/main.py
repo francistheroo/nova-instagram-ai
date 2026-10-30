@@ -38,9 +38,9 @@ app.include_router(instagram_webhook_router)
 app.include_router(canva_oauth_router)
 app.include_router(canva_api_router)
 app.include_router(canva_review_router)
-app.include_router(canva_direct_publish_router)
-app.include_router(canva_direct_post_router)
-app.include_router(instagram_reels_router)
+app.include_router(canva_direct_publish_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
+app.include_router(canva_direct_post_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
+app.include_router(instagram_reels_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
 app.include_router(admin_router)
 
 
