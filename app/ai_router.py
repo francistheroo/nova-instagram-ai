@@ -4,9 +4,13 @@ Only configured providers are called. HTTP 429, transient 5xx/network failures,
 and malformed provider responses move to the next configured provider.
 """
 import os
+import time
 from typing import Any
 
 import httpx
+
+
+_provider_cooldowns: dict[str, float] = {}
 
 
 class AIProviderUnavailable(RuntimeError):
@@ -71,6 +75,9 @@ async def chat_completion(
         raise AIProviderUnavailable("No AI text provider is configured.")
     failures: list[str] = []
     for provider in providers:
+        if _provider_cooldowns.get(provider['name'], 0) > time.monotonic():
+            failures.append(provider['name'] + ':cooldown')
+            continue
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
@@ -84,6 +91,14 @@ async def chat_completion(
                 )
             if response.is_error:
                 failures.append(f"{provider['name']}:{response.status_code}")
+                if response.status_code == 429:
+                    try:
+                        cooldown = max(30, min(900, int(response.headers.get('Retry-After', '60'))))
+                    except (ValueError, TypeError):
+                        cooldown = 60
+                    _provider_cooldowns[provider['name']] = time.monotonic() + cooldown
+                elif response.status_code >= 500:
+                    _provider_cooldowns[provider['name']] = time.monotonic() + 15
                 continue
             payload: Any = response.json()
             content = payload["choices"][0]["message"]["content"]
