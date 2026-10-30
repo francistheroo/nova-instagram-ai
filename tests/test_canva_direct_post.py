@@ -5,8 +5,16 @@ from app.main import app
 client = TestClient(app)
 
 
+def _admin_auth(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    return ("test-admin", "test-password")
+
+
+
 def test_canva_photo_publish_disabled(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    admin = _admin_auth(monkeypatch)
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "false")
     from app import canva_direct_post
 
@@ -17,6 +25,7 @@ def test_canva_photo_publish_disabled(monkeypatch):
     response = client.post(
         "/canva/instagram-posts/publish",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=admin,
         json={"design_id": "design_123", "caption": "Hello"},
     )
     assert response.status_code == 403
@@ -25,6 +34,7 @@ def test_canva_photo_publish_disabled(monkeypatch):
 def test_canva_photo_publish_success(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.setattr("app.canva_direct_post.require_master_enabled", lambda: True)
     from app import canva_direct_post, main
 
     async def no_sleep(_seconds):
