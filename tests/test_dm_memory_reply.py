@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 import app.dm_memory as memory
+import app.security as security
 from app.main import app
 
 client = TestClient(app)
@@ -27,11 +28,15 @@ def test_dm_reply_preview_requires_api_key(monkeypatch):
     response = client.post(
         "/instagram/dm-memory/preview-reply",
         json={"recipient_id": "123456", "message": "What did I say?"},
+        auth=("test-user", "test-password"),
     )
     assert response.status_code == 401
 
 
 def test_dm_reply_preview_uses_memory_but_needs_ai_config(monkeypatch):
+    monkeypatch.setenv("NOVA_USER_USERNAME", "test-user")
+    monkeypatch.setenv("NOVA_USER_PASSWORD", "test-password")
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("DATABASE_URL", "postgresql://fake")
     monkeypatch.delenv("AI_BASE_URL", raising=False)
@@ -48,3 +53,4 @@ def test_dm_reply_preview_uses_memory_but_needs_ai_config(monkeypatch):
     )
     assert response.status_code == 503
     assert "AI providers are unavailable" in response.json()["detail"]
+    app.dependency_overrides.pop(security.require_master_enabled, None)
