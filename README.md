@@ -8,13 +8,15 @@ NOVA is a FastAPI backend with a Manglish-focused AI reply preview and guarded i
 
 NOVA supports ordered failover across Gemini, Groq, an optional Hugging Face chat route, and the existing custom OpenAI-compatible provider. Set `AI_PROVIDER_ORDER` (default `gemini,groq,huggingface,legacy`) and add the relevant server-side keys: `GEMINI_API_KEY` / `GEMINI_MODEL`, `GROQ_API_KEY` / `GROQ_MODEL`, optional `HF_TOKEN` / `HF_CHAT_MODEL`, or legacy `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`. Caption generation, content ideas, reply previews, and 12-hour-memory DM drafts use the shared router. NOVA advances to the next configured provider on rate limits, provider errors, timeouts, or malformed responses. Provider quotas are independent and are not increased or bypassed; when all configured providers are unavailable, endpoints return HTTP 503. Keys remain in Render environment variables and are never returned by status endpoints.
 
-The Render web service is the backend/router; no separate support server is required. Keep PostgreSQL for durable state. Render free instances can sleep, so this is not an always-on guarantee.
+The Render web service is the backend/router; no separate support server is required. Keep PostgreSQL for durable state. Render free instances can sleep, so an in-process scheduler on a sleeping free instance cannot guarantee exact-time publishing. Use an always-on service or an external scheduler for dependable schedules.
 
 ### AI image generation
 
 `POST /ai/generate-image` remains a separate image-generation integration using `IMAGE_API_BASE_URL`, `IMAGE_API_KEY`, and `IMAGE_MODEL`. Text-only Gemini/Groq chat credentials do not automatically provide image generation. Canva Connect currently handles Canva design listing/export and does not itself grant NOVA a free image-generation model. There is no guaranteed unlimited free hosted image-generation API in this setup: provider quotas and pricing can change, and some image endpoints are paid-only. Do not configure a provider with billing unless you have permission and understand its cost. Generated media still needs a persistent public URL before it can be passed to Instagram or imported into a Canva design.
 
-- `GET /app`: same-origin NOVA Content Studio page for review-only AI captions and content ideas. It does not publish or schedule content.
+- `GET /app`: same-origin NOVA Content Studio page for AI captions and content ideas.
+- `GET /admin`: protected same-origin admin dashboard for AI provider order, daily photo-post/Story caps, scheduled times, and direct-publishing preference.
+- Background scheduler: when `NOVA_SCHEDULER_ENABLED=true`, `INSTAGRAM_AUTOMATION_ENABLED=true`, and the admin direct-publish setting is enabled, NOVA generates original image prompts/captions and publishes photo posts and image Stories at the configured local times. PostgreSQL records each date/type/slot uniquely to avoid duplicate attempts. The scheduler is opt-in and requires a persistent PostgreSQL database, a configured text provider, a compatible image provider returning public HTTPS URLs, an authorized Instagram professional account, and a service that remains awake. Reels/video generation and music attachment are not included in this scheduler.
 
 - `GET /health`: reports code-level implementation flags and whether environment values are present. It does not verify live account connectivity, permissions, or credentials. Manual token refresh and the Instagram webhook receiver are implemented; scheduled token refresh and automatic webhook subscription setup are not.
 - `POST /preview-reply`: generates an AI reply preview; it never sends it to Instagram.
@@ -44,10 +46,10 @@ The Render web service is the backend/router; no separate support server is requ
 2. In Render's private environment settings, set `META_GRAPH_BASE_URL`, `META_API_VERSION`, `INSTAGRAM_ACCESS_TOKEN`, and `INSTAGRAM_USER_ID` using values appropriate to that flow. The sample API version may need updating to a currently supported version.
 3. Set `NOVA_API_KEY` to a long, random secret. Do not put it in frontend code, public repositories, or chat.
 4. Keep `INSTAGRAM_AUTOMATION_ENABLED=false` while testing read-only endpoints. Set it to `true` only after confirming permissions and testing with content you control.
-5. Add the key as the `X-NOVA-API-Key` header when calling protected NOVA endpoints. Do not expose this key in a public browser client.
+5. Add the key as the `X-NOVA-API-Key` header when calling protected NOVA endpoints. Do not expose this key in a public browser client. Set `NOVA_ADMIN_USERNAME` and `NOVA_ADMIN_PASSWORD` for the dashboard Basic Auth.
 6. Configure `IMAGE_API_BASE_URL`, `IMAGE_API_KEY`, and `IMAGE_MODEL` for an image provider that actually supports the OpenAI-compatible `/images/generations` endpoint. A text-only Groq model is not an image-generation provider.
 7. Use a publicly reachable image URL for Instagram publishing. The image-generation endpoint's returned URL may be temporary; reliable publishing usually needs persistent object storage and a public URL.
-8. Deploy and check `/health` for code/configuration flags, then use the protected read-only `/instagram/verify` and `/instagram/media` endpoints to verify Meta access before enabling any write action.
+8. Deploy and check `/health` for code/configuration flags, then use the protected read-only `/instagram/verify` and `/instagram/media` endpoints to verify Meta access before enabling any write action.\n9. Run `python -m app.init_oauth_db` to create OAuth, Canva, DM-memory, admin-settings, and scheduler tables.\n10. Set `NOVA_SCHEDULER_ENABLED=true` and `INSTAGRAM_AUTOMATION_ENABLED=true` only after validating the connected account, scopes, image-provider output, and schedule. Set `NOVA_TIMEZONE=Asia/Kolkata` for Kerala/India local time. Configure post and Story slots in `/admin`; the scheduler defaults to 09:00 posts and 13:00 Stories.
 
 ## OAuth security foundation
 
