@@ -6,7 +6,7 @@ are true and the protected admin setting direct_publish_enabled is enabled.
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -153,15 +153,16 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                 if settings.get("direct_publish_enabled") is True:
                     zone = ZoneInfo(os.getenv("NOVA_TIMEZONE", "Asia/Kolkata"))
                     now = datetime.now(zone)
-                    slot = now.strftime("%H:%M")
+                    due_slots = {now.strftime("%H:%M"), (now - timedelta(minutes=1)).strftime("%H:%M")}
                     schedules = (
                         ("post", settings.get("post_times", ["09:00"]), int(settings.get("max_posts_per_day", 3))),
                         ("story", settings.get("story_times", ["13:00"]), int(settings.get("max_stories_per_day", 3))),
                     )
                     for kind, times, cap in schedules:
-                        if slot not in times or cap <= 0:
+                        due = next((value for value in times if value in due_slots), None)
+                        if due is None or cap <= 0:
                             continue
-                        run_id = await asyncio.to_thread(_claim_slot, now.date(), kind, slot, cap)
+                        run_id = await asyncio.to_thread(_claim_slot, now.date(), kind, due, cap)
                         if not run_id:
                             continue
                         try:
