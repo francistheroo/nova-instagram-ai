@@ -22,6 +22,7 @@ from app.canva_direct_publish import router as canva_direct_publish_router
 from app.canva_direct_post import router as canva_direct_post_router
 from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
+from app.admin import router as admin_router
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
@@ -37,6 +38,7 @@ app.include_router(canva_review_router)
 app.include_router(canva_direct_publish_router)
 app.include_router(canva_direct_post_router)
 app.include_router(instagram_reels_router)
+app.include_router(admin_router)
 
 
 class ReplyRequest(BaseModel):
