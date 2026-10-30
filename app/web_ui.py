@@ -19,7 +19,7 @@ async def nova_content_studio():
 <style>
 :root{color-scheme:dark;--bg:#050505;--panel:#101010;--line:#282828;--text:#f5f5f5;--muted:#a4a4a4;--accent:#8cffc7}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#13231c 0,#050505 48%);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif}
-main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.logo{width:46px;height:46px;border:1px solid #3e7459;border-radius:15px;display:grid;place-items:center;color:var(--accent);font-weight:900;letter-spacing:-2px;background:#0b1711}.eyebrow{font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.15em}.brand h1{font-size:24px;margin:0}.sub{color:var(--muted);margin:3px 0 0}.notice{border:1px solid #39473f;background:#0d1510;border-radius:14px;padding:12px 14px;color:#cbd8cf;margin:20px 0 24px;font-size:14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0}.card h2{font-size:19px;margin:0 0 5px}.desc{color:var(--muted);font-size:14px;margin:0 0 18px}label{display:block;font-size:13px;color:#d8d8d8;margin:13px 0 6px}input,select,textarea{font:inherit;width:100%;background:#080808;color:var(--text);border:1px solid #363636;border-radius:10px;padding:11px 12px;outline:none}textarea{min-height:90px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:var(--accent)}button{margin-top:16px;border:0;border-radius:11px;background:var(--accent);color:#06110a;font-weight:750;padding:12px 16px;font-size:14px;cursor:pointer;width:100%}button:disabled{opacity:.6;cursor:wait}.output{margin-top:15px;border-top:1px solid var(--line);padding-top:13px;white-space:pre-wrap;overflow-wrap:anywhere;color:#e6e6e6;min-height:0}.output:empty{display:none}.status{color:var(--muted);font-size:13px;margin-top:9px}.footer{color:var(--muted);font-size:12px;margin-top:20px}@media(max-width:700px){.grid{grid-template-columns:1fr}main{padding:20px 13px 40px}.card{padding:16px}}
+main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.logo{width:46px;height:46px;border:1px solid #3e7459;border-radius:15px;display:grid;place-items:center;color:var(--accent);font-weight:900;letter-spacing:-2px;background:#0b1711}.eyebrow{font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.15em}.brand h1{font-size:24px;margin:0}.sub{color:var(--muted);margin:3px 0 0}.notice{border:1px solid #39473f;background:#0d1510;border-radius:14px;padding:12px 14px;color:#cbd8cf;margin:20px 0 24px;font-size:14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0}.card h2{font-size:19px;margin:0 0 5px}.desc{color:var(--muted);font-size:14px;margin:0 0 18px}label{display:block;font-size:13px;color:#d8d8d8;margin:13px 0 6px}input,select,textarea{font:inherit;width:100%;background:#080808;color:var(--text);border:1px solid #363636;border-radius:10px;padding:11px 12px;outline:none}textarea{min-height:90px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:var(--accent)}button{margin-top:16px;border:0;border-radius:11px;background:var(--accent);color:#06110a;font-weight:750;padding:12px 16px;font-size:14px;cursor:pointer;width:100%}button:disabled{opacity:.6;cursor:wait}.output{margin-top:15px;border-top:1px solid var(--line);padding-top:13px;white-space:pre-wrap;overflow-wrap:anywhere;color:#e6e6e6;min-height:0}.output:empty{display:none}.status{color:var(--muted);font-size:13px;margin-top:9px}.image-preview{display:block;max-width:100%;max-height:420px;margin-top:12px;border-radius:12px;border:1px solid var(--line)}.footer{color:var(--muted);font-size:12px;margin-top:20px}@media(max-width:700px){.grid{grid-template-columns:1fr}main{padding:20px 13px 40px}.card{padding:16px}}
 </style>
 </head>
 <body>
@@ -44,6 +44,15 @@ main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;alig
 <label for="ideasFormat">Preferred format</label><select id="ideasFormat"><option>mix of Reels, carousels, and photo posts</option><option>Reels</option><option>carousels</option><option>photo posts</option></select>
 <label for="ideasLanguage">Language</label><select id="ideasLanguage"><option>Manglish</option><option>Malayalam</option><option>English</option><option>Malayalam and English</option></select>
 <button type="submit">Generate ideas</button><div class="status" id="ideasStatus" role="status"></div><div class="output" id="ideasOutput" aria-live="polite"></div>
+</form></section>
+<section class="card">
+<h2>AI image creator</h2><p class="desc">Create an image from a prompt using the image provider configured on the NOVA server.</p>
+<form id="imageForm">
+<label for="imagePrompt">Describe the image</label><textarea id="imagePrompt" required minlength="3" maxlength="2000" placeholder="Example: colourful Kerala monsoon street illustration, cinematic lighting"></textarea>
+<label for="imageSize">Image size</label><select id="imageSize"><option value="1024x1024">Square · 1:1</option><option value="1024x1536">Portrait · 2:3</option><option value="1536x1024">Landscape · 3:2</option></select>
+<label for="novaKey">NOVA API key</label><input id="novaKey" type="password" autocomplete="off" placeholder="Enter your NOVA API key for this request" required>
+<button type="submit">Create image</button><div class="status" id="imageStatus" role="status"></div><img id="imagePreview" class="image-preview" alt="Generated image preview" hidden>
+<a id="imageDownload" hidden download="nova-generated-image.png" style="display:inline-block;margin-top:12px;color:var(--accent)">Save generated image</a>
 </form></section>
 </div>
 <p class="footer">NOVA Content Studio · Drafts are AI-generated and may need fact-checking and editing. Trend data is not fetched by this tool.</p>
@@ -79,6 +88,34 @@ document.getElementById('ideasForm').addEventListener('submit', event => {
     format:document.getElementById('ideasFormat').value,
     language:document.getElementById('ideasLanguage').value
   }), data => data.ideas.map((idea, i) => (i+1)+'. '+idea.title+' ('+idea.format+')\nHook: '+idea.hook+'\nIdea: '+idea.concept+(idea.call_to_action?'\nCTA: '+idea.call_to_action:'')).join('\n\n'));
+});
+
+document.getElementById('imageForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const status = document.getElementById('imageStatus');
+  const preview = document.getElementById('imagePreview');
+  const download = document.getElementById('imageDownload');
+  button.disabled = true; status.textContent = 'Creating image…'; preview.hidden = true; download.hidden = true;
+  try {
+    const response = await fetch('/ai/generate-image', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-NOVA-API-Key':document.getElementById('novaKey').value},
+      body:JSON.stringify({prompt:document.getElementById('imagePrompt').value,size:document.getElementById('imageSize').value})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Image generation failed.');
+    const result = data.provider_response || {};
+    const item = result.data && result.data[0] ? result.data[0] : result;
+    const source = item.url || (item.b64_json ? 'data:image/png;base64,' + item.b64_json : null);
+    if (!source) throw new Error('Provider returned no previewable image. Check its response format.');
+    preview.src = source; preview.hidden = false;
+    download.href = source; download.hidden = false;
+    status.textContent = 'Image created. You can save it and then use it in a Canva design.';
+  } catch (error) {
+    status.textContent = error.message || 'Could not create the image.';
+  } finally { button.disabled = false; }
 });
 </script>
 </body>
