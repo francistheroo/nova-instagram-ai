@@ -90,6 +90,7 @@ async def list_canva_designs(
 async def canva_export_formats(
     design_id: str,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Return formats Canva says are available for this design."""
     if not design_id or len(design_id) > 200 or not all(ch.isalnum() or ch in "_-" for ch in design_id):
@@ -101,6 +102,7 @@ async def canva_export_formats(
 async def create_canva_export(
     body: CanvaExportRequest,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Start an asynchronous export job; this does not download the file."""
     return await _canva_request(
@@ -114,6 +116,7 @@ async def create_canva_export(
 async def get_canva_export(
     job_id: str,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Check an export job; Canva download URLs are temporary and must be handled securely."""
     if not job_id or len(job_id) > 200 or not all(ch.isalnum() or ch in "_-" for ch in job_id):
