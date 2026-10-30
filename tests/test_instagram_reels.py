@@ -123,3 +123,30 @@ def test_reel_publish_is_explicit_and_requires_finished(monkeypatch):
     assert response.json()["published"] is True
     assert calls[-1][0:2] == ("POST", "user_123/media_publish")
     assert calls[-1][3] == {"creation_id": "container_123"}
+
+
+def test_reel_draft_requires_admin_login(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    response = client.post(
+        "/instagram/reels/drafts",
+        headers=KEY,
+        json={"video_url": "https://example.com/reel.mp4"},
+    )
+    assert response.status_code == 401
+
+
+def test_reel_draft_fails_closed_when_master_switch_is_off(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", ADMIN[0])
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", ADMIN[1])
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    response = client.post(
+        "/instagram/reels/drafts",
+        headers=KEY,
+        auth=ADMIN,
+        json={"video_url": "https://example.com/reel.mp4"},
+    )
+    assert response.status_code == 503
+    assert "master switch is OFF" in response.json()["detail"]
