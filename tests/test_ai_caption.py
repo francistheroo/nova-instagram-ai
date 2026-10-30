@@ -9,11 +9,14 @@ def test_caption_draft_requires_ai_configuration(monkeypatch):
     monkeypatch.delenv("AI_BASE_URL", raising=False)
     monkeypatch.delenv("AI_API_KEY", raising=False)
     monkeypatch.delenv("AI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
 
     response = client.post("/ai/generate-caption", json={"topic": "Kerala monsoon", "tone": "funny"})
 
     assert response.status_code == 503
-    assert "AI caption generation is not configured" in response.json()["detail"]
+    assert "AI providers are unavailable" in response.json()["detail"]
 
 
 def test_caption_draft_validates_input():
