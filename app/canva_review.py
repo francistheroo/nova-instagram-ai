@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.canva_api import _canva_request, require_nova_key
+from app.security import require_user, require_master_enabled
 
 router = APIRouter(prefix="/canva", tags=["Canva Instagram review"])
 
@@ -54,6 +55,7 @@ def _valid_job_id(job_id: str) -> bool:
 async def create_instagram_draft_export(
     body: InstagramDraftExportRequest,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Check format support, then start an export for review; never publish."""
     export_format = {"type": "png"} if body.target == "post" else {
@@ -133,6 +135,7 @@ async def create_instagram_reel_draft_from_canva_export(
             status_code=403,
             detail="Instagram actions are disabled. Enable only after testing and authorization.",
         )
+    require_master_enabled()
 
     export_payload = await _canva_request("GET", f"exports/{job_id}")
     job = export_payload.get("job", {})
