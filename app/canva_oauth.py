@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
+from app.security import require_user
 from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import OAuthStoreError, consume_oauth_state, save_oauth_state
 from app.canva_store import (
@@ -48,7 +49,7 @@ def _require_nova_key(x_nova_api_key: str | None = Header(default=None)):
 
 
 @router.get("/start")
-async def canva_oauth_start():
+async def canva_oauth_start(_: bool = Depends(require_user)):
     client_id, _, redirect_uri = _config()
     try:
         state = create_oauth_state()
