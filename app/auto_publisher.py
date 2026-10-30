@@ -54,6 +54,11 @@ def _settings():
 
 def _claim_slot(local_date, kind, slot, daily_limit):
     with psycopg.connect(_db_url(), connect_timeout=10) as conn:
+        # Serialize cap checks for each local date/content type across workers.
+        conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            (f"nova-auto-publish:{local_date}:{kind}",),
+        )
         count = conn.execute(
             "SELECT COUNT(*) FROM nova_auto_publish_runs WHERE local_date=%s AND content_type=%s AND status='published'",
             (local_date, kind),
