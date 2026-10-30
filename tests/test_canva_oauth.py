@@ -17,10 +17,12 @@ client = TestClient(app)
 
 
 def test_canva_oauth_start_requires_server_configuration(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
     monkeypatch.delenv("CANVA_CLIENT_ID", raising=False)
     monkeypatch.delenv("CANVA_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("CANVA_REDIRECT_URI", raising=False)
-    response = client.get("/oauth/canva/start")
+    response = client.get("/oauth/canva/start", auth=("nova-admin", "test-admin-password"))
     assert response.status_code == 503
 
 
@@ -700,3 +702,14 @@ def test_canva_api_maps_raw_database_failure_to_service_unavailable(monkeypatch)
 
     assert response.status_code == 503
     assert "private database endpoint" not in response.text
+
+
+def test_canva_oauth_start_requires_admin_login(monkeypatch):
+    monkeypatch.setenv("CANVA_CLIENT_ID", "test-client")
+    monkeypatch.setenv("CANVA_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CANVA_REDIRECT_URI", "https://testserver/oauth/canva/callback")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    response = client.get("/oauth/canva/start", follow_redirects=False)
+    assert response.status_code == 401
+

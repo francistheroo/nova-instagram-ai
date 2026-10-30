@@ -9,10 +9,11 @@ from urllib.parse import urlencode
 
 import httpx
 import psycopg
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
+from app.security import require_user
 from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import (
     OAuthStoreError,
@@ -49,7 +50,7 @@ def _config() -> dict[str, str]:
 
 
 @router.get("/start")
-async def instagram_oauth_start():
+async def instagram_oauth_start(_: bool = Depends(require_user)):
     """Create and persist OAuth state, then redirect the browser to Instagram."""
     config = _config()
     try:
