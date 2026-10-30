@@ -1,4 +1,6 @@
 import os
+import hmac
+import re
 import asyncio
 from typing import Optional, Any
 from datetime import datetime, timezone
@@ -85,7 +87,7 @@ class PublishImageRequest(BaseModel):
 
 
 class MessageReplyRequest(BaseModel):
-    recipient_id: str = Field(min_length=1, max_length=200)
+    recipient_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:-]+$")
     message: str = Field(min_length=1, max_length=1000)
 
 
@@ -101,9 +103,15 @@ def require_nova_key(x_nova_api_key: Optional[str] = Header(default=None)):
             status_code=503,
             detail="Set NOVA_API_KEY in Render environment variables before using action endpoints.",
         )
-    if not x_nova_api_key or x_nova_api_key != expected:
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
+
+
+def _validate_instagram_object_id(value: str, field_name: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,200}", value or ""):
+        raise HTTPException(status_code=422, detail=f"Invalid {field_name}.")
+    return value
 
 
 def instagram_config():
@@ -280,7 +288,7 @@ async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __:
 
 
 @app.get("/instagram/verify")
-async def verify_instagram_connection(_: bool = Depends(require_nova_key)):
+async def verify_instagram_connection(_: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
     """Verify configured credentials against Meta and return the authorized profile identity."""
     _, user_id, _ = instagram_config()
     profile = await meta_request("GET", user_id, params={"fields": "id,username"})
@@ -290,7 +298,7 @@ async def verify_instagram_connection(_: bool = Depends(require_nova_key)):
 
 
 @app.get("/instagram/media")
-async def list_instagram_media(_: bool = Depends(require_nova_key)):
+async def list_instagram_media(_: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
     """List media available to the authorized Instagram professional account."""
     _, user_id, _ = instagram_config()
     return await meta_request(
@@ -301,7 +309,8 @@ async def list_instagram_media(_: bool = Depends(require_nova_key)):
 
 
 @app.get("/instagram/media/{media_id}/comments")
-async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
+async def list_comments(media_id: str, _: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
+    _validate_instagram_object_id(media_id, "media ID")
     return await meta_request(
         "GET",
         f"{media_id}/comments",
@@ -310,17 +319,20 @@ async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
 
 
 @app.post("/instagram/comments/{comment_id}/reply")
-async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool = Depends(require_nova_key)):
+async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
+    _validate_instagram_object_id(comment_id, "comment ID")
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Instagram actions are disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after testing and authorization.")
+    require_master_enabled()
     return await meta_request("POST", f"{comment_id}/replies", data={"message": body.message})
 
 
 @app.post("/instagram/messages/reply")
-async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_nova_key)):
+async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
     """Send a reply to an eligible Instagram-scoped recipient ID after Meta messaging authorization."""
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Instagram actions are disabled. Enable only after testing and authorization.")
+    require_master_enabled()
     _, user_id, _ = instagram_config()
     return await meta_request(
         "POST",
