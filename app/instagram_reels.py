@@ -7,6 +7,8 @@ import os
 import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+
+from app.security import require_user, require_master_enabled
 from pydantic import BaseModel, Field, HttpUrl
 
 router = APIRouter(prefix="/instagram/reels", tags=["Instagram Reels"])
@@ -17,7 +19,7 @@ def _require_nova_key(x_nova_api_key: str | None = Header(default=None)):
     expected = os.getenv("NOVA_API_KEY", "")
     if not expected:
         raise HTTPException(status_code=503, detail="NOVA_API_KEY is not configured.")
-    if not x_nova_api_key or x_nova_api_key != expected:
+    if not x_nova_api_key or not __import__("hmac").compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
 
@@ -37,7 +39,7 @@ class ReelDraftRequest(BaseModel):
 
 
 @router.post("/drafts")
-async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_nova_key)):
+async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
     """Create a Meta video container for review; this endpoint never publishes."""
     if body.video_url.scheme != "https":
         raise HTTPException(status_code=422, detail="video_url must use HTTPS.")
@@ -89,7 +91,7 @@ async def get_reel_draft_status(container_id: str, _: bool = Depends(_require_no
 
 
 @router.post("/drafts/{container_id}/publish")
-async def publish_reel_draft(container_id: str, _: bool = Depends(_require_nova_key)):
+async def publish_reel_draft(container_id: str, _: bool = Depends(_require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
     """Explicitly publish a reviewed Reel only when Meta says its container is ready."""
     if not _CONTAINER_ID.fullmatch(container_id):
         raise HTTPException(status_code=422, detail="Invalid Reel container ID.")
