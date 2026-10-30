@@ -181,6 +181,21 @@ def mark_canva_refresh_pending(account_key: str) -> None:
             raise CanvaStoreError("The selected Canva account could not be marked for token rotation.")
 
 
+
+def clear_canva_refresh_pending(account_key: str) -> None:
+    """Clear a pending marker only when the provider confirms no rotation occurred."""
+    if not isinstance(account_key, str) or not account_key.strip():
+        raise CanvaStoreError("A valid Canva account key is required to clear refresh state.")
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE nova_canva_tokens
+            SET refresh_pending = FALSE, refresh_started_at = NULL, updated_at = NOW()
+            WHERE account_key = %s
+            """,
+            (account_key.strip(),),
+        )
+
 def load_latest_canva_tokens() -> dict[str, Any] | None:
     """Load the configured account, or the sole connected account for legacy setups.
 
