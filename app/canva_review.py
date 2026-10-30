@@ -102,6 +102,7 @@ async def create_instagram_draft_export(
 async def get_instagram_draft_export(
     job_id: str,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Poll Canva and return a temporary URL for manual review, not publication."""
     if not _valid_job_id(job_id):
@@ -126,6 +127,7 @@ async def create_instagram_reel_draft_from_canva_export(
     job_id: str,
     body: CreateInstagramReelFromExportRequest,
     _: bool = Depends(require_nova_key),
+    __: bool = Depends(require_user),
 ):
     """Turn a completed Canva MP4 export into an Instagram Reel container, never publish."""
     if not _valid_job_id(job_id):
