@@ -11,7 +11,7 @@ def test_integrations_status_is_safe_and_explicit(monkeypatch):
         "INSTAGRAM_OAUTH_CLIENT_ID", "INSTAGRAM_OAUTH_CLIENT_SECRET",
         "INSTAGRAM_OAUTH_REDIRECT_URI", "OAUTH_STATE_SECRET", "TOKEN_ENCRYPTION_KEY",
         "CANVA_CLIENT_ID", "CANVA_CLIENT_SECRET", "CANVA_REDIRECT_URI",
-        "AI_BASE_URL", "AI_API_KEY", "AI_MODEL",
+        "AI_BASE_URL", "AI_API_KEY", "AI_MODEL", "GEMINI_API_KEY", "GROQ_API_KEY", "HF_TOKEN",
         "IMAGE_API_BASE_URL", "IMAGE_API_KEY", "IMAGE_MODEL",
     ):
         monkeypatch.delenv(key, raising=False)

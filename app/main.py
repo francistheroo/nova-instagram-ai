@@ -8,6 +8,7 @@ from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
+from app.ai_router import AIProviderUnavailable, chat_completion, configured_provider_names
 from app.instagram_oauth import router as instagram_oauth_router
 from app.ai_caption import router as ai_caption_router
 from app.content_ideas import router as content_ideas_router
@@ -156,7 +157,8 @@ async def health():
         "instagram_webhook_subscription_automated": False,
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
         "instagram_auto_dm_replies_enabled": os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true",
-        "ai_configured": bool(os.getenv("AI_BASE_URL", "").strip() and os.getenv("AI_API_KEY", "").strip() and os.getenv("AI_MODEL", "").strip()),
+        "ai_configured": bool(configured_provider_names()),
+        "ai_providers_configured": configured_provider_names(),
         "image_generation_configured": bool(os.getenv("IMAGE_API_BASE_URL", "").strip() and os.getenv("IMAGE_API_KEY", "").strip() and os.getenv("IMAGE_MODEL", "").strip()),
         "canva_configured": bool(os.getenv("CANVA_CLIENT_ID", "").strip() and os.getenv("CANVA_CLIENT_SECRET", "").strip()),
         "canva_live_connection_verified": False,
@@ -199,7 +201,8 @@ async def integrations_status():
             "direct_reel_publish_route_implemented": True,
         },
         "ai": {
-            "text_provider_configured": bool(env("AI_BASE_URL", "").strip() and env("AI_API_KEY", "").strip() and env("AI_MODEL", "").strip()),
+            "text_provider_configured": bool(configured_provider_names()),
+            "text_providers_configured": configured_provider_names(),
             "image_provider_configured": bool(env("IMAGE_API_BASE_URL", "").strip() and env("IMAGE_API_KEY", "").strip() and env("IMAGE_MODEL", "").strip()),
         },
         "warning": "Configured variables do not prove that credentials are valid, permissions are approved, or external services are connected.",
@@ -209,11 +212,7 @@ async def integrations_status():
 @app.post("/preview-reply")
 async def preview_reply(body: ReplyRequest):
     """Generate a reply preview. This endpoint does not send anything to Instagram."""
-    base_url = os.getenv("AI_BASE_URL", "").rstrip("/")
-    api_key = os.getenv("AI_API_KEY", "")
-    model = os.getenv("AI_MODEL", "")
-
-    if not (base_url and api_key and model):
+    if not configured_provider_names():
         return {
             "reply": (
                 "NOVA AI: Enikku Manglish, Malayalam, English okke handle cheyyan "
@@ -226,27 +225,24 @@ async def preview_reply(body: ReplyRequest):
 
     user_message = body.message
     if body.language_hint:
-        user_message += f"\n\nLanguage preference hint: {body.language_hint}"
-
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        response = await client.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": NOVA_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
-                "temperature": 0.8,
-            },
+        user_message += f"\\n\\nLanguage preference hint: {body.language_hint}"
+    try:
+        reply, provider, model = await chat_completion(
+            [
+                {"role": "system", "content": NOVA_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.8,
         )
-        if response.is_error:
-            raise HTTPException(status_code=502, detail="AI provider request failed. Check provider settings in Render.")
-        data = response.json()
-
-    reply = data["choices"][0]["message"]["content"]
-    return {"reply": reply, "mode": "ai", "sent_to_instagram": False}
+    except AIProviderUnavailable:
+        raise HTTPException(status_code=503, detail="All configured AI providers are unavailable or rate-limited. Try again later.") from None
+    return {
+        "reply": reply,
+        "mode": "ai",
+        "provider": provider,
+        "model": model,
+        "sent_to_instagram": False,
+    }
 
 
 @app.get("/instagram/verify")

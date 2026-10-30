@@ -43,6 +43,9 @@ def test_preview_reply_uses_fallback_when_provider_not_configured(monkeypatch):
     monkeypatch.delenv("AI_BASE_URL", raising=False)
     monkeypatch.delenv("AI_API_KEY", raising=False)
     monkeypatch.delenv("AI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
     response = client.post("/preview-reply", json={"message": "Hi NOVA"})
     assert response.status_code == 200
     payload = response.json()
