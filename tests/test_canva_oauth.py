@@ -13,7 +13,10 @@ def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     original_request = client.request
     def authenticated_request(method, url, *args, **kwargs):
-        kwargs.setdefault("auth", ("test-admin", "test-password"))
+        headers = dict(kwargs.get("headers") or {})
+        headers.setdefault("Authorization", "Basic dGVzdC1hZG1pbjp0ZXN0LXBhc3N3b3Jk")
+        kwargs["headers"] = headers
+        kwargs.pop("auth", None)
         return original_request(method, url, *args, **kwargs)
     monkeypatch.setattr(client, "request", authenticated_request)
     from app import canva_oauth
