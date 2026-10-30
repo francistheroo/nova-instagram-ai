@@ -55,6 +55,20 @@ def _configured_providers() -> list[dict[str, str]]:
     order = [item.strip().lower() for item in os.getenv(
         "AI_PROVIDER_ORDER", "gemini,groq,huggingface,legacy"
     ).split(",") if item.strip()]
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        try:
+            import psycopg
+            if database_url.startswith("postgres://"):
+                database_url = "postgresql://" + database_url[len("postgres://"):]
+            with psycopg.connect(database_url, connect_timeout=2) as conn:
+                row = conn.execute(
+                    "SELECT setting_value FROM nova_admin_settings WHERE setting_key='provider_order'"
+                ).fetchone()
+            if row and isinstance(row[0], list) and all(isinstance(name, str) for name in row[0]):
+                order = [name.strip().lower() for name in row[0] if name.strip()]
+        except Exception:
+            pass
     return [providers[name] for name in order if name in providers]
 
 

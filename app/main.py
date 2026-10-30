@@ -1,4 +1,5 @@
 import os
+import asyncio
 from typing import Optional, Any
 from datetime import datetime, timezone
 
@@ -23,6 +24,7 @@ from app.canva_direct_post import router as canva_direct_post_router
 from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
+from app.auto_publisher import scheduler_loop, initialize_scheduler_schema
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
@@ -39,6 +41,32 @@ app.include_router(canva_direct_publish_router)
 app.include_router(canva_direct_post_router)
 app.include_router(instagram_reels_router)
 app.include_router(admin_router)
+
+
+@app.on_event("startup")
+async def start_auto_publisher():
+    # The durable scheduler is opt-in and never starts from an API request.
+    if os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true":
+        from app.auto_publisher import initialize_scheduler_schema
+        try:
+            initialize_scheduler_schema()
+            app.state.nova_scheduler_stop = asyncio.Event()
+            app.state.nova_scheduler_task = asyncio.create_task(
+                scheduler_loop(meta_request, instagram_config, app.state.nova_scheduler_stop)
+            )
+        except Exception:
+            # Keep the API available; /health reports scheduler readiness separately.
+            app.state.nova_scheduler_error = "scheduler_initialization_failed"
+
+
+@app.on_event("shutdown")
+async def stop_auto_publisher():
+    stop = getattr(app.state, "nova_scheduler_stop", None)
+    task = getattr(app.state, "nova_scheduler_task", None)
+    if stop is not None:
+        stop.set()
+    if task is not None:
+        await task
 
 
 class ReplyRequest(BaseModel):
@@ -158,6 +186,8 @@ async def health():
         "instagram_webhook_verification_route_implemented": True,
         "instagram_webhook_subscription_automated": False,
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
+        "auto_scheduler_enabled": os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true",
+        "auto_scheduler_running": hasattr(app.state, "nova_scheduler_task"),
         "instagram_auto_dm_replies_enabled": os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true",
         "ai_configured": bool(configured_provider_names()),
         "ai_providers_configured": configured_provider_names(),
