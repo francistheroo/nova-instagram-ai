@@ -8,12 +8,14 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-client = TestClient(app, base_url="https://testserver")
+client = TestClient(app, base_url="https://testserver", auth=("test-admin", "test-password"))
 
 
 @pytest.fixture(autouse=True)
 def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
     """Mock coordination for unit tests; PostgreSQL lock behavior has integration tests."""
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     from app import instagram_oauth
 
     monkeypatch.setattr(instagram_oauth, "instagram_refresh_lock", lambda: nullcontext())
