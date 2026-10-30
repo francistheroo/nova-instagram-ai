@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.security as security
 
 client = TestClient(app)
 
@@ -77,10 +78,14 @@ def test_protected_media_route_requires_instagram_configuration(monkeypatch):
 
 def test_write_action_stays_disabled_by_default(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setitem(app.dependency_overrides, security.require_master_enabled, lambda: True)
     monkeypatch.delenv("INSTAGRAM_AUTOMATION_ENABLED", raising=False)
     response = client.post(
         "/instagram/comments/123/reply",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("test-admin", "test-password"),
         json={"message": "Thanks for commenting!"},
     )
     assert response.status_code == 403
@@ -153,3 +158,17 @@ def test_verify_route_rejects_malformed_meta_profile(monkeypatch, profile):
     assert response.status_code == 502
     assert response.json()["detail"] == "Meta did not return a valid Instagram profile response."
     assert "fake-token-for-test" not in response.text
+
+
+
+def test_manual_instagram_message_reply_requires_admin_login(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    response = client.post(
+        "/instagram/messages/reply",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"recipient_id": "123", "message": "Hello"},
+    )
+    assert response.status_code == 401
