@@ -159,20 +159,22 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                         ("story", settings.get("story_times", ["13:00"]), int(settings.get("max_stories_per_day", 3))),
                     )
                     for kind, times, cap in schedules:
-                        due = next((value for value in times if value in due_slots), None)
-                        if due is None or cap <= 0:
+                        if cap <= 0:
                             continue
-                        run_id = await asyncio.to_thread(_claim_slot, now.date(), kind, due, cap)
-                        if not run_id:
-                            continue
-                        try:
-                            media_id = await _generate_and_publish(kind, meta_request, instagram_config)
-                            await asyncio.to_thread(_finish, run_id, "published", media_id, None)
-                        except AIProviderUnavailable:
-                            await asyncio.to_thread(_finish, run_id, "failed", None, "ai_provider_unavailable")
-                        except Exception as exc:
-                            code = str(exc)[:80] if isinstance(exc, RuntimeError) else "publish_failed"
-                            await asyncio.to_thread(_finish, run_id, "failed", None, code)
+                        for due in times:
+                            if due not in due_slots:
+                                continue
+                            run_id = await asyncio.to_thread(_claim_slot, now.date(), kind, due, cap)
+                            if not run_id:
+                                continue
+                            try:
+                                media_id = await _generate_and_publish(kind, meta_request, instagram_config)
+                                await asyncio.to_thread(_finish, run_id, "published", media_id, None)
+                            except AIProviderUnavailable:
+                                await asyncio.to_thread(_finish, run_id, "failed", None, "ai_provider_unavailable")
+                            except Exception as exc:
+                                code = str(exc)[:80] if isinstance(exc, RuntimeError) else "publish_failed"
+                                await asyncio.to_thread(_finish, run_id, "failed", None, code)
         except Exception:
             # A transient database/config error must not crash the FastAPI server.
             pass
