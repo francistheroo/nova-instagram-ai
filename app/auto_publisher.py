@@ -13,6 +13,7 @@ import httpx
 import psycopg
 
 from app.ai_router import AIProviderUnavailable, chat_completion
+from app.security import master_enabled
 
 
 def _db_url():
@@ -155,7 +156,7 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
             )
             if enabled and _db_url():
                 settings = await asyncio.to_thread(_settings)
-                if settings.get("direct_publish_enabled") is True:
+                if master_enabled() and settings.get("direct_publish_enabled") is True:
                     zone = ZoneInfo(os.getenv("NOVA_TIMEZONE", "Asia/Kolkata"))
                     now = datetime.now(zone)
                     due_slots = {now.strftime("%H:%M"), (now - timedelta(minutes=1)).strftime("%H:%M")}
