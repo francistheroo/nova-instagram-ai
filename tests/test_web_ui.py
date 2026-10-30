@@ -12,4 +12,6 @@ def test_content_studio_page_loads():
     assert "NOVA Content Studio" in response.text
     assert "/ai/generate-caption" in response.text
     assert "/ai/content-ideas" in response.text
+    assert "/ai/generate-image" in response.text
+    assert "AI image creator" in response.text
     assert "does not publish" in response.text.lower()
