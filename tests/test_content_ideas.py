@@ -28,6 +28,7 @@ def test_content_ideas_returns_review_only_ideas(monkeypatch):
     monkeypatch.setenv("AI_BASE_URL", "https://ai.example.test/v1")
     monkeypatch.setenv("AI_API_KEY", "test-key")
     monkeypatch.setenv("AI_MODEL", "test-model")
+    monkeypatch.setenv("AI_PROVIDER_ORDER", "legacy")
 
     ideas = [
         {
@@ -65,7 +66,7 @@ def test_content_ideas_returns_review_only_ideas(monkeypatch):
         async def post(self, *args, **kwargs):
             return FakeResponse()
 
-    monkeypatch.setattr("app.content_ideas.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("app.ai_router.httpx.AsyncClient", FakeClient)
 
     response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2})
 
@@ -83,6 +84,7 @@ def test_content_ideas_rejects_malformed_ai_output(monkeypatch):
     monkeypatch.setenv("AI_BASE_URL", "https://ai.example.test/v1")
     monkeypatch.setenv("AI_API_KEY", "test-key")
     monkeypatch.setenv("AI_MODEL", "test-model")
+    monkeypatch.setenv("AI_PROVIDER_ORDER", "legacy")
 
     class FakeResponse:
         is_error = False
@@ -103,7 +105,7 @@ def test_content_ideas_rejects_malformed_ai_output(monkeypatch):
         async def post(self, *args, **kwargs):
             return FakeResponse()
 
-    monkeypatch.setattr("app.content_ideas.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("app.ai_router.httpx.AsyncClient", FakeClient)
 
     response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2})
 
