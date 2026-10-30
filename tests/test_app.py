@@ -40,17 +40,22 @@ def test_health_does_not_claim_instagram_is_connected(monkeypatch):
 
 
 def test_preview_reply_uses_fallback_when_provider_not_configured(monkeypatch):
+    import app.security as security
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    monkeypatch.setenv("NOVA_USER_USERNAME", "test-user")
+    monkeypatch.setenv("NOVA_USER_PASSWORD", "test-password")
     monkeypatch.delenv("AI_BASE_URL", raising=False)
     monkeypatch.delenv("AI_API_KEY", raising=False)
     monkeypatch.delenv("AI_MODEL", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("HF_TOKEN", raising=False)
-    response = client.post("/preview-reply", json={"message": "Hi NOVA"})
+    response = client.post("/preview-reply", json={"message": "Hi NOVA"}, auth=("test-user", "test-password"))
     assert response.status_code == 200
     payload = response.json()
     assert payload["mode"] == "fallback"
     assert payload["sent_to_instagram"] is False
+    app.dependency_overrides.pop(security.require_master_enabled, None)
 
 
 def test_protected_media_route_rejects_missing_key(monkeypatch):

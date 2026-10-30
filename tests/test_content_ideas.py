@@ -1,10 +1,22 @@
 import json
 
 from fastapi.testclient import TestClient
+import pytest
+
+import app.security as security
 
 from app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def authenticated_ai_client(monkeypatch):
+    monkeypatch.setenv("NOVA_USER_USERNAME", "test-user")
+    monkeypatch.setenv("NOVA_USER_PASSWORD", "test-password")
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_master_enabled, None)
 
 
 def test_content_ideas_requires_ai_configuration(monkeypatch):
@@ -15,14 +27,14 @@ def test_content_ideas_requires_ai_configuration(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("HF_TOKEN", raising=False)
 
-    response = client.post("/ai/content-ideas", json={"topic": "Kerala food"})
+    response = client.post("/ai/content-ideas", json={"topic": "Kerala food"}, auth=("test-user", "test-password"))
 
     assert response.status_code == 503
     assert "AI providers are unavailable" in response.json()["detail"]
 
 
 def test_content_ideas_rejects_out_of_range_count():
-    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 11})
+    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 11}, auth=("test-user", "test-password"))
 
     assert response.status_code == 422
 
@@ -71,7 +83,7 @@ def test_content_ideas_returns_review_only_ideas(monkeypatch):
 
     monkeypatch.setattr("app.ai_router.httpx.AsyncClient", FakeClient)
 
-    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2})
+    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2}, auth=("test-user", "test-password"))
 
     assert response.status_code == 200
     payload = response.json()
@@ -110,7 +122,7 @@ def test_content_ideas_rejects_malformed_ai_output(monkeypatch):
 
     monkeypatch.setattr("app.ai_router.httpx.AsyncClient", FakeClient)
 
-    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2})
+    response = client.post("/ai/content-ideas", json={"topic": "Kerala food", "count": 2}, auth=("test-user", "test-password"))
 
     assert response.status_code == 502
     assert "invalid content ideas" in response.json()["detail"]

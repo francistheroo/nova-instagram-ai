@@ -1,8 +1,20 @@
 from fastapi.testclient import TestClient
+import pytest
+
+import app.security as security
 
 from app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def authenticated_ai_client(monkeypatch):
+    monkeypatch.setenv("NOVA_USER_USERNAME", "test-user")
+    monkeypatch.setenv("NOVA_USER_PASSWORD", "test-password")
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_master_enabled, None)
 
 
 def test_caption_draft_requires_ai_configuration(monkeypatch):
@@ -13,14 +25,14 @@ def test_caption_draft_requires_ai_configuration(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("HF_TOKEN", raising=False)
 
-    response = client.post("/ai/generate-caption", json={"topic": "Kerala monsoon", "tone": "funny"})
+    response = client.post("/ai/generate-caption", json={"topic": "Kerala monsoon", "tone": "funny"}, auth=("test-user", "test-password"))
 
     assert response.status_code == 503
     assert "AI providers are unavailable" in response.json()["detail"]
 
 
 def test_caption_draft_validates_input():
-    response = client.post("/ai/generate-caption", json={"topic": "x"})
+    response = client.post("/ai/generate-caption", json={"topic": "x"}, auth=("test-user", "test-password"))
 
     assert response.status_code == 422
 
@@ -60,6 +72,7 @@ def test_caption_draft_is_registered_and_does_not_publish(monkeypatch):
             "language": "Manglish",
             "include_hashtags": True,
         },
+        auth=("test-user", "test-password"),
     )
 
     assert response.status_code == 200

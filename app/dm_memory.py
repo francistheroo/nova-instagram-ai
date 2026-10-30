@@ -16,6 +16,7 @@ from psycopg.rows import dict_row
 
 from app.personality import NOVA_SYSTEM_PROMPT
 from app.ai_router import AIProviderUnavailable, chat_completion
+from app.security import require_user, require_master_enabled
 
 router = APIRouter()
 MEMORY_TTL = timedelta(hours=12)
@@ -104,7 +105,7 @@ class DMReplyPreviewRequest(BaseModel):
     language_hint: str | None = Field(default=None, max_length=30)
 
 
-@router.post("/instagram/dm-memory/preview-reply", dependencies=[Depends(_require_nova_key)])
+@router.post("/instagram/dm-memory/preview-reply", dependencies=[Depends(_require_nova_key), Depends(require_user), Depends(require_master_enabled)])
 async def preview_dm_reply(body: DMReplyPreviewRequest):
     """Generate a review-only reply draft using the last 12 hours of stored context."""
     now = datetime.now(timezone.utc)

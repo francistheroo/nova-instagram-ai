@@ -19,6 +19,7 @@ from app.dm_memory import (
     store_dm_message,
 )
 from app.oauth_store import load_latest_instagram_token
+from app.security import master_enabled
 
 router = APIRouter(prefix="/webhooks/instagram", tags=["Instagram webhook"])
 
@@ -62,7 +63,7 @@ async def receive_instagram_webhook(
 
     stored = sent = skipped = 0
     retry_requested = False
-    auto_enabled = os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true"
+    auto_enabled = (os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true" and master_enabled())
     try:
         entries = payload.get("entry", []) if isinstance(payload, dict) else []
         if not isinstance(entries, list):

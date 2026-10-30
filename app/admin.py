@@ -53,6 +53,7 @@ def require_admin(authorization: Optional[str] = Header(default=None)):
 def read_settings():
     result = {
         "provider_order": [p.strip() for p in os.getenv("AI_PROVIDER_ORDER", "gemini,groq,huggingface,legacy").split(",") if p.strip()],
+        "master_enabled": False,
         "max_posts_per_day": 3,
         "max_stories_per_day": 3,
         "direct_publish_enabled": False,
@@ -71,6 +72,7 @@ def read_settings():
 
 
 class SettingsUpdate(BaseModel):
+    master_enabled: bool = False
     provider_order: list[str] = Field(min_length=1, max_length=4)
     max_posts_per_day: int = Field(ge=0, le=50)
     max_stories_per_day: int = Field(ge=0, le=50)
@@ -85,6 +87,7 @@ async def admin_page():
 <style>
 body{margin:0;background:#050505;color:#eee;font:15px system-ui}main{max-width:720px;margin:32px auto;padding:18px}.card{background:#111;border:1px solid #292929;border-radius:16px;padding:20px;margin:14px 0}h1{color:#8cffc7}label{display:block;margin:12px 0 5px}input{background:#080808;color:white;border:1px solid #444;border-radius:9px;padding:11px;width:100%;box-sizing:border-box}input[type=checkbox]{width:auto}button{background:#8cffc7;color:#06110a;border:0;border-radius:10px;padding:12px 18px;font-weight:bold;width:100%}.hint,#status{color:#aaa;font-size:13px}
 </style></head><body><main><h1>NOVA Admin</h1><p class="hint">Server-side settings. API keys remain in Render and are never displayed.</p>
+<div class="card"><h2>Master switch</h2><label><input id="master" type="checkbox"> NOVA AI ON — allow AI features and scheduled publishing</label><p class="hint">OFF disables AI generation and scheduled publishing immediately. Admin settings remain accessible.</p></div>
 <div class="card"><h2>AI provider fallback order</h2><label for="providers">Provider order</label><input id="providers" placeholder="gemini,groq,huggingface,legacy"><p class="hint">Supported: gemini, groq, huggingface, legacy</p></div>
 <div class="card"><h2>Daily publishing limits</h2><label for="posts">AI photo posts per day</label><input id="posts" type="number" min="0" max="50"><label for="stories">Stories per day</label><input id="stories" type="number" min="0" max="50"></div>
 <div class="card"><h2>Automatic schedule</h2><label for="posttimes">Photo post times (24-hour, comma-separated)</label><input id="posttimes" placeholder="09:00,18:00"><label for="storytimes">Story times (24-hour, comma-separated)</label><input id="storytimes" placeholder="13:00"><p class="hint">Times use NOVA_TIMEZONE; default Asia/Kolkata.</p></div>
@@ -93,8 +96,8 @@ body{margin:0;background:#050505;color:#eee;font:15px system-ui}main{max-width:7
 <script>
 async function api(method,body){const r=await fetch('/admin/api/settings',{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw Error(d.detail||'Request failed');return d}
 const status=document.getElementById('status');
-async function load(){try{const s=await api('GET');document.getElementById('providers').value=s.provider_order.join(',');document.getElementById('posts').value=s.max_posts_per_day;document.getElementById('stories').value=s.max_stories_per_day;document.getElementById('direct').checked=s.direct_publish_enabled;document.getElementById('posttimes').value=s.post_times.join(',');document.getElementById('storytimes').value=s.story_times.join(',');status.textContent='Settings loaded.'}catch(e){status.textContent=e.message}}
-document.getElementById('save').onclick=async()=>{try{const s=await api('PUT',{provider_order:document.getElementById('providers').value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),max_posts_per_day:Number(document.getElementById('posts').value),max_stories_per_day:Number(document.getElementById('stories').value),direct_publish_enabled:document.getElementById('direct').checked,post_times:document.getElementById('posttimes').value.split(',').map(x=>x.trim()).filter(Boolean),story_times:document.getElementById('storytimes').value.split(',').map(x=>x.trim()).filter(Boolean)});status.textContent='Settings saved. Fallback: '+s.provider_order.join(' → ')}catch(e){status.textContent=e.message}};
+async function load(){try{const s=await api('GET');document.getElementById('master').checked=s.master_enabled;document.getElementById('providers').value=s.provider_order.join(',');document.getElementById('posts').value=s.max_posts_per_day;document.getElementById('stories').value=s.max_stories_per_day;document.getElementById('direct').checked=s.direct_publish_enabled;document.getElementById('posttimes').value=s.post_times.join(',');document.getElementById('storytimes').value=s.story_times.join(',');status.textContent='Settings loaded.'}catch(e){status.textContent=e.message}}
+document.getElementById('save').onclick=async()=>{try{const s=await api('PUT',{master_enabled:document.getElementById('master').checked,provider_order:document.getElementById('providers').value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),max_posts_per_day:Number(document.getElementById('posts').value),max_stories_per_day:Number(document.getElementById('stories').value),direct_publish_enabled:document.getElementById('direct').checked,post_times:document.getElementById('posttimes').value.split(',').map(x=>x.trim()).filter(Boolean),story_times:document.getElementById('storytimes').value.split(',').map(x=>x.trim()).filter(Boolean)});status.textContent='Settings saved. Fallback: '+s.provider_order.join(' → ')}catch(e){status.textContent=e.message}};
 load();
 </script></body></html>""")
 
