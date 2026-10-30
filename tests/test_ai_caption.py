@@ -26,6 +26,7 @@ def test_caption_draft_is_registered_and_does_not_publish(monkeypatch):
     monkeypatch.setenv("AI_BASE_URL", "https://ai.example.test/v1")
     monkeypatch.setenv("AI_API_KEY", "test-key")
     monkeypatch.setenv("AI_MODEL", "test-model")
+    monkeypatch.setenv("AI_PROVIDER_ORDER", "legacy")
 
     class FakeResponse:
         is_error = False
@@ -46,7 +47,7 @@ def test_caption_draft_is_registered_and_does_not_publish(monkeypatch):
         async def post(self, *args, **kwargs):
             return FakeResponse()
 
-    monkeypatch.setattr("app.ai_caption.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("app.ai_router.httpx.AsyncClient", FakeClient)
 
     response = client.post(
         "/ai/generate-caption",
