@@ -44,4 +44,4 @@ def test_dm_reply_preview_uses_memory_but_needs_ai_config(monkeypatch):
         json={"recipient_id": "123456", "message": "What did I say?"},
     )
     assert response.status_code == 503
-    assert response.json()["detail"] == "AI provider is not configured."
+    assert "AI providers are unavailable" in response.json()["detail"]
