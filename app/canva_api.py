@@ -19,7 +19,7 @@ def require_nova_key(x_nova_api_key: str | None = Header(default=None)):
     expected = os.getenv("NOVA_API_KEY", "")
     if not expected:
         raise HTTPException(status_code=503, detail="Set NOVA_API_KEY in server environment before using Canva action endpoints.")
-    if not x_nova_api_key or !hmac.compare_digest(x_nova_api_key, expected):
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
 
