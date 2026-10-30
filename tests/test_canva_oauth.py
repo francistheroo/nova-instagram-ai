@@ -308,6 +308,8 @@ def test_canva_refresh_rejects_malformed_provider_response(monkeypatch, replacem
             "refresh_token": "old-refresh",
         },
     )
+    monkeypatch.setattr(canva_oauth, "mark_canva_refresh_pending", lambda account_key: None)
+    monkeypatch.setattr(canva_oauth, "clear_canva_refresh_pending", lambda account_key: None)
     monkeypatch.setattr(
         canva_oauth,
         "save_canva_tokens",
@@ -353,6 +355,8 @@ def _configure_canva_refresh(monkeypatch, current=None):
             "expires_at": None,
         }
     monkeypatch.setattr(canva_oauth, "load_latest_canva_tokens", lambda: current)
+    monkeypatch.setattr(canva_oauth, "mark_canva_refresh_pending", lambda account_key: None)
+    monkeypatch.setattr(canva_oauth, "clear_canva_refresh_pending", lambda account_key: None)
     return canva_oauth, current
 
 

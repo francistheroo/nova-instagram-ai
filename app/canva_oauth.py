@@ -19,6 +19,8 @@ from app.canva_store import (
     CanvaRefreshInProgress,
     canva_refresh_lock,
     load_latest_canva_tokens,
+    mark_canva_refresh_pending,
+    clear_canva_refresh_pending,
     save_canva_tokens,
 )
 
@@ -175,6 +177,18 @@ async def _refresh_canva_tokens_locked(client_id: str, client_secret: str):
     if not isinstance(refresh_token, str) or not refresh_token.strip():
         raise HTTPException(status_code=503, detail="No Canva refresh token is stored. Reconnect Canva to grant access again.")
     user_id = current.get("user_id")
+    account_key = str(user_id).strip() if user_id is not None else os.getenv("CANVA_ACCOUNT_KEY", "").strip() or "default"
+
+    # Persist this marker before sending the single-use refresh token to Canva.
+    # If the request times out or saving the rotated bundle fails, all subsequent
+    # token reads fail closed until a fresh OAuth connection replaces the bundle.
+    try:
+        mark_canva_refresh_pending(account_key)
+    except (CanvaStoreError, OAuthSecurityError, OAuthStoreError, psycopg.Error):
+        raise HTTPException(
+            status_code=503,
+            detail="Canva refresh state could not be recorded safely. No provider request was made.",
+        ) from None
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -191,9 +205,16 @@ async def _refresh_canva_tokens_locked(client_id: str, client_secret: str):
                     detail="Canva rejected the stored refresh token. Reconnect Canva and authorize access again.",
                 )
             if response.status_code == 429:
+                try:
+                    clear_canva_refresh_pending(account_key)
+                except (CanvaStoreError, OAuthSecurityError, OAuthStoreError, psycopg.Error):
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Canva rate-limited token refresh and NOVA could not clear its safety marker. Reconnect Canva before retrying.",
+                    ) from None
                 raise HTTPException(
                     status_code=503,
-                    detail="Canva temporarily rate-limited token refresh. Try again later; no replacement token was saved.",
+                    detail="Canva temporarily rate-limited token refresh. No token rotation occurred; retry later.",
                 )
             raise HTTPException(
                 status_code=502,
