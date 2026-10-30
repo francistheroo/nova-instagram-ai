@@ -224,3 +224,35 @@ def test_token_bundle_is_encrypted_at_rest(canva_db):
     assert plaintext_access not in row[1]
     assert plaintext_refresh not in row[1]
     assert row[1] != json.dumps(_bundle(account_key, plaintext_access, plaintext_refresh))
+
+
+def test_pending_rotation_blocks_stale_credentials_until_reconnected(canva_db):
+    account_key = "canva-pending-rotation-" + secrets.token_urlsafe(8)
+    canva_store.save_canva_tokens(_bundle(account_key, "old-access", "old-refresh"), expires_at=None)
+
+    canva_store.mark_canva_refresh_pending(account_key)
+    with pytest.raises(CanvaStoreError, match="outcome is uncertain"):
+        canva_store.load_canva_tokens(account_key)
+    with pytest.raises(CanvaStoreError, match="outcome is uncertain"):
+        canva_store.load_latest_canva_tokens()
+
+    # A newly authorized token bundle atomically clears the pending marker.
+    canva_store.save_canva_tokens(_bundle(account_key, "new-access", "new-refresh"), expires_at=None)
+    loaded = canva_store.load_canva_tokens(account_key)
+    assert loaded is not None
+    assert loaded["access_token"] == "new-access"
+    assert loaded["refresh_token"] == "new-refresh"
+
+
+def test_refresh_marker_is_durable_across_database_sessions(canva_db):
+    account_key = "canva-pending-durable-" + secrets.token_urlsafe(8)
+    canva_store.save_canva_tokens(_bundle(account_key, "durable-access", "durable-refresh"), expires_at=None)
+    canva_store.mark_canva_refresh_pending(account_key)
+
+    with psycopg.connect(canva_db["url"]) as conn:
+        row = conn.execute(
+            "SELECT refresh_pending, refresh_started_at FROM nova_canva_tokens WHERE account_key = %s",
+            (account_key,),
+        ).fetchone()
+    assert row[0] is True
+    assert row[1] is not None
