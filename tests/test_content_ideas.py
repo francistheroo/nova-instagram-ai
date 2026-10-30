@@ -14,9 +14,8 @@ client = TestClient(app)
 def authenticated_ai_client(monkeypatch):
     monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
-    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    monkeypatch.setitem(app.dependency_overrides, security.require_master_enabled, lambda: True)
     yield
-    app.dependency_overrides.pop(security.require_master_enabled, None)
 
 
 def test_content_ideas_requires_ai_configuration(monkeypatch):
