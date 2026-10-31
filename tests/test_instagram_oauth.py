@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlparse
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.security as security
 
 client = TestClient(app, base_url="https://testserver")
 
@@ -17,6 +18,9 @@ def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
     from app import instagram_oauth
 
     monkeypatch.setattr(instagram_oauth, "instagram_refresh_lock", lambda: nullcontext())
+    app.dependency_overrides[security.require_user] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_user, None)
 
 
 def configure_oauth(monkeypatch):
@@ -799,3 +803,27 @@ def test_instagram_callback_maps_raw_postgres_state_error_to_503(monkeypatch):
 
     assert response.status_code == 503
     assert "private database failure" not in response.text
+
+
+def test_instagram_oauth_start_requires_admin_login(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+
+    response = client.get("/oauth/instagram/start")
+
+    assert response.status_code == 401
+
+
+def test_instagram_token_refresh_requires_admin_even_with_api_key(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    monkeypatch.setenv("NOVA_API_KEY", "test-api-key")
+
+    response = client.post(
+        "/oauth/instagram/refresh",
+        headers={"X-NOVA-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 401
