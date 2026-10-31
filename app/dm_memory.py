@@ -270,12 +270,12 @@ def claim_dm_event(message_id: str) -> bool:
         return result.fetchone() is not None
 
 
-def finish_dm_event(message_id: str, status: Literal["sent", "retryable", "ignored"]) -> None:
+def finish_dm_event(message_id: str, status: Literal["sent", "retryable", "ignored", "uncertain"]) -> None:
     """Record a reply outcome; retryable failures may be claimed again."""
     if not isinstance(message_id, str) or not message_id or len(message_id) > 512:
         raise ValueError("invalid Meta message ID")
-    if status not in ("sent", "retryable", "ignored"):
-        raise ValueError("status must be sent, retryable, or ignored")
+    if status not in ("sent", "retryable", "ignored", "uncertain"):
+        raise ValueError("status must be sent, retryable, ignored, or uncertain")
     now = datetime.now(timezone.utc)
     with _connect() as conn:
         result = conn.execute(
@@ -311,7 +311,7 @@ def initialize_schema() -> None:
             """
             CREATE TABLE IF NOT EXISTS nova_instagram_dm_events (
                 message_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'retryable', 'ignored')),
+                status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'retryable', 'ignored', 'uncertain')),
                 lease_until TIMESTAMPTZ,
                 updated_at TIMESTAMPTZ NOT NULL
             )
@@ -328,7 +328,7 @@ def initialize_schema() -> None:
             """
             ALTER TABLE nova_instagram_dm_events
             ADD CONSTRAINT nova_instagram_dm_events_status_check
-            CHECK (status IN ('processing', 'sent', 'retryable', 'ignored'))
+            CHECK (status IN ('processing', 'sent', 'retryable', 'ignored', 'uncertain'))
             """
         )
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS nova_instagram_dm_memory_message_id_idx ON nova_instagram_dm_memory (message_id) WHERE message_id IS NOT NULL")
