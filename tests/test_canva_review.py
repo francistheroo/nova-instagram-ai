@@ -1,6 +1,18 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+import pytest
+import app.security as security
+
+
+@pytest.fixture(autouse=True)
+def allow_authenticated_admin_in_unit_tests():
+    app.dependency_overrides[security.require_user] = lambda: True
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_user, None)
+    app.dependency_overrides.pop(security.require_master_enabled, None)
+
 
 client = TestClient(app)
 
@@ -192,3 +204,21 @@ def test_canva_export_to_reel_respects_disabled_actions(monkeypatch):
         json={"caption": "My Reel"},
     )
     assert response.status_code == 403
+
+
+def test_canva_reel_draft_requires_master_switch(monkeypatch):
+    app.dependency_overrides.pop(security.require_master_enabled, None)
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    response = client.post(
+        "/canva/instagram-reel-drafts/job_mp4",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("nova-admin", "test-admin-password"),
+        json={"caption": "Hello"},
+    )
+
+    assert response.status_code == 503
+    assert "master switch is OFF" in response.json()["detail"]

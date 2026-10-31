@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.security as security
 
 @pytest.fixture(autouse=True)
 def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
@@ -12,6 +13,9 @@ def bypass_shared_refresh_lock_for_unit_tests(monkeypatch):
     from app import canva_oauth
 
     monkeypatch.setattr(canva_oauth, "canva_refresh_lock", lambda: nullcontext())
+    app.dependency_overrides[security.require_user] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_user, None)
 
 client = TestClient(app)
 
@@ -700,3 +704,27 @@ def test_canva_api_maps_raw_database_failure_to_service_unavailable(monkeypatch)
 
     assert response.status_code == 503
     assert "private database endpoint" not in response.text
+
+
+def test_canva_design_api_requires_admin_even_with_api_key(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+
+    response = client.get(
+        "/canva/designs",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_canva_oauth_start_requires_admin_login(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+
+    response = client.get("/oauth/canva/start")
+
+    assert response.status_code == 401

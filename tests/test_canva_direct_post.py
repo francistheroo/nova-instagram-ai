@@ -1,6 +1,18 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+import pytest
+import app.security as security
+
+
+@pytest.fixture(autouse=True)
+def allow_authenticated_admin_in_unit_tests():
+    app.dependency_overrides[security.require_user] = lambda: True
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_user, None)
+    app.dependency_overrides.pop(security.require_master_enabled, None)
+
 
 client = TestClient(app)
 
@@ -64,3 +76,19 @@ def test_canva_photo_publish_success(monkeypatch):
     assert response.json()["published"] is True
     assert len(canva_calls) == 3
     assert [call[1] for call in meta_calls] == ["user_123/media", "user_123/media_publish"]
+
+
+def test_canva_photo_publish_requires_admin_login(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+
+    response = client.post(
+        "/canva/instagram-posts/publish",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"design_id": "design_123", "caption": "Hello"},
+    )
+
+    assert response.status_code == 401

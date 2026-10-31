@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
 from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import OAuthStoreError, consume_oauth_state, save_oauth_state
+from app.security import require_user
 from app.canva_store import (
     CanvaStoreError,
     CanvaRefreshInProgress,
@@ -24,7 +25,7 @@ from app.canva_store import (
     save_canva_tokens,
 )
 
-router = APIRouter(prefix="/oauth/canva", tags=["Canva OAuth"])
+router = APIRouter(prefix="/oauth/canva", tags=["Canva OAuth"], dependencies=[Depends(require_user)])
 
 
 def _config() -> tuple[str, str, str]:
