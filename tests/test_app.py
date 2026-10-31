@@ -172,3 +172,57 @@ def test_manual_instagram_message_reply_requires_admin_login(monkeypatch):
         json={"recipient_id": "123", "message": "Hello"},
     )
     assert response.status_code == 401
+
+
+
+def test_instagram_comment_lookup_rejects_invalid_object_id(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+
+    async def should_not_call_meta(*args, **kwargs):
+        pytest.fail("Invalid Instagram object IDs must be rejected before calling Meta")
+
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "meta_request", should_not_call_meta)
+
+    response = client.get(
+        "/instagram/media/invalid$id/comments",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("test-admin", "test-password"),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid Instagram-scoped object ID."
+
+
+def test_instagram_comment_reply_rejects_invalid_comment_id(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.setitem(app.dependency_overrides, security.require_master_enabled, lambda: True)
+
+    async def should_not_call_meta(*args, **kwargs):
+        pytest.fail("Invalid Instagram comment IDs must be rejected before calling Meta")
+
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "meta_request", should_not_call_meta)
+
+    response = client.post(
+        "/instagram/comments/invalid$id/reply",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("test-admin", "test-password"),
+        json={"message": "Thanks!"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid Instagram-scoped object ID."
+
+
+def test_instagram_message_reply_rejects_invalid_recipient_id(monkeypatch):
+    response = client.post(
+        "/instagram/messages/reply",
+        json={"recipient_id": "bad/id", "message": "Hello"},
+    )
+    assert response.status_code == 422
