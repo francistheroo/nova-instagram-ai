@@ -44,7 +44,7 @@ def test_processing_slots_reserve_daily_publish_capacity(monkeypatch):
 
     assert run_id == 17
     count_sql = " ".join(connection.statements[1][0].split())
-    assert "status IN ('processing','published')" in count_sql
+    assert "status IN ('processing','published','uncertain')" in count_sql
 
 
 def test_daily_limit_blocks_new_slot_when_processing_and_published_fill_cap(monkeypatch):
