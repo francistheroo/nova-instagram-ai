@@ -230,10 +230,14 @@ async def receive_instagram_webhook(
             detail="One or more Instagram DM events are retryable; please retry this webhook delivery.",
         )
 
-    return {
+    result = {
         "received": True,
         "stored_text_messages": stored,
         "automatic_replies_sent": sent,
         "automatic_replies_skipped": skipped,
-        "automatic_replies_uncertain": uncertain,
     }
+    # Preserve the existing response shape for normal deliveries; include the
+    # additional field only when an outcome actually needs manual review.
+    if uncertain:
+        result["automatic_replies_uncertain"] = uncertain
+    return result
