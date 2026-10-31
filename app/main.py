@@ -1,6 +1,7 @@
 import os
 import asyncio
 import hmac
+import re
 from typing import Optional, Any
 from datetime import datetime, timezone
 
@@ -86,13 +87,22 @@ class PublishImageRequest(BaseModel):
 
 
 class MessageReplyRequest(BaseModel):
-    recipient_id: str = Field(min_length=1, max_length=200)
+    recipient_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:-]+$")
     message: str = Field(min_length=1, max_length=1000)
 
 
 class ImageGenerationRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=2000)
     size: str = Field(default="1024x1024", pattern=r"^(1024x1024|1024x1536|1536x1024)$")
+
+
+
+_INSTAGRAM_OBJECT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,200}$")
+
+
+def _validate_instagram_object_id(value: str) -> None:
+    if not isinstance(value, str) or not _INSTAGRAM_OBJECT_ID.fullmatch(value):
+        raise HTTPException(status_code=422, detail="Invalid Instagram-scoped object ID.")
 
 
 def require_nova_key(x_nova_api_key: Optional[str] = Header(default=None)):
@@ -303,6 +313,7 @@ async def list_instagram_media(_: bool = Depends(require_nova_key)):
 
 @app.get("/instagram/media/{media_id}/comments")
 async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
+    _validate_instagram_object_id(media_id)
     return await meta_request(
         "GET",
         f"{media_id}/comments",
@@ -312,6 +323,7 @@ async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
 
 @app.post("/instagram/comments/{comment_id}/reply")
 async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
+    _validate_instagram_object_id(comment_id)
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Instagram actions are disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after testing and authorization.")
     return await meta_request("POST", f"{comment_id}/replies", data={"message": body.message})
