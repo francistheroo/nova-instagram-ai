@@ -8,3 +8,4 @@ def preserve_existing_webhook_test_master_state(request, monkeypatch):
     if "webhook" in node_id and "master_switch" not in node_id:
         import app.instagram_webhook as webhook_module
         monkeypatch.setattr(webhook_module, "master_enabled", lambda: True)
+        monkeypatch.setattr(webhook_module, "mark_dm_event_sending", lambda _message_id: None)
