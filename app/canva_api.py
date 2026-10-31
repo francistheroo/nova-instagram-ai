@@ -1,4 +1,5 @@
 """Protected server-side Canva Connect API endpoints for designs and exports."""
+import hmac
 import os
 from typing import Any
 
@@ -8,15 +9,16 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.canva_store import CanvaStoreError, load_latest_canva_tokens
+from app.security import require_user
 
-router = APIRouter(prefix="/canva", tags=["Canva Connect API"])
+router = APIRouter(prefix="/canva", tags=["Canva Connect API"], dependencies=[Depends(require_user)])
 
 
 def require_nova_key(x_nova_api_key: str | None = Header(default=None)):
     expected = os.getenv("NOVA_API_KEY", "")
     if not expected:
         raise HTTPException(status_code=503, detail="Set NOVA_API_KEY in server environment before using Canva action endpoints.")
-    if not x_nova_api_key or x_nova_api_key != expected:
+    if not x_nova_api_key or not hmac.compare_digest(x_nova_api_key, expected):
         raise HTTPException(status_code=401, detail="Missing or invalid X-NOVA-API-Key.")
     return True
 
