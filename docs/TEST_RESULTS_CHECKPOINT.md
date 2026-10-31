@@ -17,6 +17,10 @@ This file tracks verified repository/CI checks separately from live Instagram in
 | PR #95 / #96 test setup failures | FIXED | [PR #97](https://github.com/francistheroo/nova-instagram-ai/pull/97) | Earlier failures were caused by missing test environment setup, not proof of live Instagram failure. |
 | Historical main run #260 | FAIL (superseded) | [Actions run #260](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41198306363) | 450 passed, 1 failed, 6 skipped. The failure was invalid-recipient test setup (missing API key); later corrected by PR #97 and subsequent green main runs. |
 
+
+| DM memory 12-hour expiry | PASS + MERGED | [PR #102](https://github.com/francistheroo/nova-instagram-ai/pull/102) · [PR CI #41202572266](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202572266) | Added regression tests proving insertion expiry is exactly 12 hours after creation and reads delete/filter expired rows. Test-only change; merged as `d18fe5054e544fe63c00e6bf892c1a70f8150f55`. No live Instagram messages involved. |
+| Checkpoint documentation after PR #101 | PASS | [Main CI #41202516818](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202516818) | Main workflow completed successfully after PR #101. |
+
 | Oversized inbound DM text | PASS + MERGED | [PR #100](https://github.com/francistheroo/nova-instagram-ai/pull/100) · [PR CI #41202216448](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202216448) · [main CI #41202333972](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202333972) | Webhook skips text above the existing 4,000-character storage limit before claiming an idempotency slot or writing memory; tests cover auto-replies on/off and exact-limit acceptance. Merged as `b4fd434caeb2dc6641e6847c36780063d4e5a644`. |
 
 ## Security PR status
@@ -31,7 +35,7 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 
 ## Not yet verified
 
-- Duplicate webhook delivery and idempotency under retries.
+- Duplicate webhook delivery and idempotency under retries (existing coverage requires further audit for edge cases).
 - Ambiguous outbound DM delivery: ensure uncertain sends are not automatically resent.
 - Scheduler daily limits and timezone boundary cases beyond the already merged midnight-slot fix.
 - Live Meta OAuth authorization and token exchange.
