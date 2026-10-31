@@ -470,6 +470,51 @@ def test_webhook_trims_text_before_storing(monkeypatch):
     assert response.json()["stored_text_messages"] == 1
 
 
+@pytest.mark.parametrize("auto_replies_enabled", ["true", "false"])
+def test_webhook_skips_oversized_dm_text_without_claiming_or_retrying(monkeypatch, auto_replies_enabled):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", auto_replies_enabled)
+    monkeypatch.setattr(
+        webhook,
+        "claim_dm_event",
+        lambda *_args, **_kwargs: pytest.fail("Oversized message must not claim a retry slot"),
+    )
+    monkeypatch.setattr(
+        webhook,
+        "store_dm_message",
+        lambda *_args, **_kwargs: pytest.fail("Oversized message must not reach DM storage"),
+    )
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{
+            "sender": {"id": "12345"},
+            "message": {"mid": "oversized-dm-mid", "text": "x" * (webhook.MAX_DM_MESSAGE_CHARS + 1)},
+        }]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+    assert response.json()["automatic_replies_sent"] == 0
+    assert response.json()["automatic_replies_skipped"] == 1
+
+
+def test_webhook_accepts_dm_text_at_storage_limit(monkeypatch):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false")
+    stored = []
+    monkeypatch.setattr(
+        webhook,
+        "store_dm_message",
+        lambda sender, role, text, message_id=None: (stored.append((sender, role, text, message_id)) or "stored"),
+    )
+    message = "x" * webhook.MAX_DM_MESSAGE_CHARS
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{
+            "sender": {"id": "12345"},
+            "message": {"mid": "max-sized-dm-mid", "text": message},
+        }]}],
+    })
+    assert response.status_code == 200
+    assert stored == [("12345", "user", message, "max-sized-dm-mid")]
+    assert response.json()["stored_text_messages"] == 1
+
+
 @pytest.mark.parametrize("payload", [
     None, [], "not-an-object", 7,
 ])
