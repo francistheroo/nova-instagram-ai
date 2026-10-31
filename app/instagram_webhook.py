@@ -22,6 +22,7 @@ from app.oauth_store import load_latest_instagram_token
 from app.security import master_enabled
 
 router = APIRouter(prefix="/webhooks/instagram", tags=["Instagram webhook"])
+MAX_WEBHOOK_BODY_BYTES = 1_048_576
 
 
 def _secret(name: str) -> str:
@@ -51,7 +52,14 @@ async def receive_instagram_webhook(
 ):
     """Verify Meta's signature and process supported incoming text DM events."""
     app_secret = _secret("META_APP_SECRET")
-    raw_body = await request.body()
+    # Read in bounded chunks so a signed but oversized delivery cannot force
+    # an unbounded request.body() allocation before signature verification.
+    body_chunks = bytearray()
+    async for chunk in request.stream():
+        body_chunks.extend(chunk)
+        if len(body_chunks) > MAX_WEBHOOK_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Webhook payload exceeds the 1 MiB limit.")
+    raw_body = bytes(body_chunks)
     expected = "sha256=" + hmac.new(app_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
     if not x_hub_signature_256 or not hmac.compare_digest(x_hub_signature_256, expected):
         raise HTTPException(status_code=401, detail="Invalid webhook signature.")
