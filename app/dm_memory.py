@@ -270,6 +270,29 @@ def claim_dm_event(message_id: str) -> bool:
         return result.fetchone() is not None
 
 
+def mark_dm_event_sending(message_id: str) -> None:
+    """Persist that the external send is about to begin.
+
+    Sending rows are never reclaimed automatically: after a worker crash the
+    remote outcome may be unknown, so replaying could create a duplicate DM.
+    """
+    if not isinstance(message_id, str) or not message_id or len(message_id) > 512:
+        raise ValueError("invalid Meta message ID")
+    now = datetime.now(timezone.utc)
+    with _connect() as conn:
+        result = conn.execute(
+            """
+            UPDATE nova_instagram_dm_events
+               SET status = 'sending', lease_until = NULL, updated_at = %s
+             WHERE message_id = %s AND status = 'processing'
+            RETURNING message_id
+            """,
+            (now, message_id),
+        )
+        if result.fetchone() is None:
+            raise RuntimeError("DM event was not in processing state")
+
+
 def finish_dm_event(message_id: str, status: Literal["sent", "retryable", "ignored", "uncertain"]) -> None:
     """Record a reply outcome; retryable failures may be claimed again."""
     if not isinstance(message_id, str) or not message_id or len(message_id) > 512:
@@ -282,7 +305,7 @@ def finish_dm_event(message_id: str, status: Literal["sent", "retryable", "ignor
             """
             UPDATE nova_instagram_dm_events
                SET status = %s, lease_until = NULL, updated_at = %s
-             WHERE message_id = %s AND status = 'processing'
+             WHERE message_id = %s AND status IN ('processing', 'sending')
             RETURNING message_id
             """,
             (status, now, message_id),
@@ -311,7 +334,7 @@ def initialize_schema() -> None:
             """
             CREATE TABLE IF NOT EXISTS nova_instagram_dm_events (
                 message_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL CHECK (status IN ('processing', 'sent', 'retryable', 'ignored', 'uncertain')),
+                status TEXT NOT NULL CHECK (status IN ('processing', 'sending', 'sent', 'retryable', 'ignored', 'uncertain')),
                 lease_until TIMESTAMPTZ,
                 updated_at TIMESTAMPTZ NOT NULL
             )
@@ -328,7 +351,7 @@ def initialize_schema() -> None:
             """
             ALTER TABLE nova_instagram_dm_events
             ADD CONSTRAINT nova_instagram_dm_events_status_check
-            CHECK (status IN ('processing', 'sent', 'retryable', 'ignored', 'uncertain'))
+            CHECK (status IN ('processing', 'sending', 'sent', 'retryable', 'ignored', 'uncertain'))
             """
         )
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS nova_instagram_dm_memory_message_id_idx ON nova_instagram_dm_memory (message_id) WHERE message_id IS NOT NULL")
