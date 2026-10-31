@@ -221,6 +221,8 @@ def test_instagram_comment_reply_rejects_invalid_comment_id(monkeypatch):
 
 
 def test_instagram_message_reply_rejects_invalid_recipient_id(monkeypatch):
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     response = client.post(
         "/instagram/messages/reply",
         json={"recipient_id": "bad/id", "message": "Hello"},
