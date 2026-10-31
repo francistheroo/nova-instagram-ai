@@ -33,6 +33,15 @@ def _secret(name: str) -> str:
     return value
 
 
+def _valid_sender_id(value: object) -> bool:
+    """Reject malformed sender IDs before they can cause endless webhook retries."""
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= 128
+        and all(character.isalnum() or character in "_.:-" for character in value)
+    )
+
+
 @router.get("")
 async def verify_instagram_webhook(
     mode: str | None = Query(default=None, alias="hub.mode"),
@@ -92,7 +101,7 @@ async def receive_instagram_webhook(
                 text = message.get("text")
                 raw_mid = message.get("mid")
                 message_id = raw_mid if isinstance(raw_mid, str) and 0 < len(raw_mid) <= 512 else None
-                if not (isinstance(sender_id, str) and sender_id.strip() and isinstance(text, str) and text.strip()):
+                if not (_valid_sender_id(sender_id) and isinstance(text, str) and text.strip()):
                     continue
 
                 # A stable Meta message ID is required for safe retry claims. Without
