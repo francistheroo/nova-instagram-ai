@@ -312,6 +312,30 @@ def test_webhook_ignores_missing_or_nonstring_sender_id(monkeypatch, event):
     assert response.json()["automatic_replies_sent"] == 0
 
 
+@pytest.mark.parametrize("sender_id", ["", " ", "bad/id", " id ", "x" * 129])
+def test_webhook_ignores_malformed_sender_id_without_retrying(monkeypatch, sender_id):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setattr(
+        webhook,
+        "store_dm_message",
+        lambda *_a, **_k: pytest.fail("Malformed sender ID must not reach storage"),
+    )
+    monkeypatch.setattr(
+        webhook,
+        "claim_dm_event",
+        lambda *_a, **_k: pytest.fail("Malformed sender ID must not claim a retry event"),
+    )
+    response = _post_signed_payload(monkeypatch, {
+        "entry": [{"messaging": [{
+            "sender": {"id": sender_id},
+            "message": {"mid": "malformed-sender-mid", "text": "Hello"},
+        }]}],
+    })
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 0
+    assert response.json()["automatic_replies_sent"] == 0
+
+
 @pytest.mark.parametrize("message", [
     {"mid": "missing-text-mid"},
     {"mid": "nonstring-text-mid", "text": 123},
