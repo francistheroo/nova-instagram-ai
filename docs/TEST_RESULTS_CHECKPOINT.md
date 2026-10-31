@@ -18,6 +18,7 @@ This file tracks verified repository/CI checks separately from live Instagram in
 | Historical main run #260 | FAIL (superseded) | [Actions run #260](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41198306363) | 450 passed, 1 failed, 6 skipped. The failure was invalid-recipient test setup (missing API key); later corrected by PR #97 and subsequent green main runs. |
 
 
+| PR #103 checkpoint refresh | MERGED | [PR #103](https://github.com/francistheroo/nova-instagram-ai/pull/103) | Recorded PR #102 DM-memory expiry tests and prior main workflow evidence; merged as `46b699b8766745b4ee24bc128c7124e69231e28c`. No application behavior changes. |
 | DM memory 12-hour expiry | PASS + MERGED | [PR #102](https://github.com/francistheroo/nova-instagram-ai/pull/102) · [PR CI #41202572266](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202572266) | Added regression tests proving insertion expiry is exactly 12 hours after creation and reads delete/filter expired rows. Test-only change; merged as `d18fe5054e544fe63c00e6bf892c1a70f8150f55`. No live Instagram messages involved. |
 | Checkpoint documentation after PR #101 | PASS | [Main CI #41202516818](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202516818) | Main workflow completed successfully after PR #101. |
 
@@ -35,7 +36,8 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 
 ## Not yet verified
 
-- Duplicate webhook delivery and idempotency under retries (existing coverage requires further audit for edge cases).
+- Webhook duplicate/idempotency review: existing tests cover duplicate message IDs, retryable AI/Meta failures, post-send history failure, and ambiguous send timeout; further concurrent-delivery/database integration testing remains pending.
+- Scheduler reliability: existing tests cover daily-cap reservation and midnight local-date handling. Stale `processing` publish rows intentionally are not auto-reclaimed because Meta may already have accepted a publish before a worker crash; they need an explicit reconciliation policy. Downtime longer than the one-minute catch-up window can miss a slot; decide whether missed slots should be skipped or backfilled.
 - Ambiguous outbound DM delivery: ensure uncertain sends are not automatically resent.
 - Scheduler daily limits and timezone boundary cases beyond the already merged midnight-slot fix.
 - Live Meta OAuth authorization and token exchange.
