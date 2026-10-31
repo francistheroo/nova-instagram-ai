@@ -151,3 +151,18 @@ def test_uncertain_send_state_is_not_reclaimed(postgres_db):
     dm_memory.finish_dm_event(message_id, "uncertain")
 
     assert dm_memory.claim_dm_event(message_id) is False
+
+
+def test_sending_state_is_not_reclaimed_after_worker_crash(postgres_db):
+    message_id = "integration.sending.crash"
+    assert dm_memory.claim_dm_event(message_id) is True
+
+    dm_memory.mark_dm_event_sending(message_id)
+
+    assert dm_memory.claim_dm_event(message_id) is False
+    with psycopg.connect(postgres_db) as conn:
+        row = conn.execute(
+            "SELECT status, lease_until FROM nova_instagram_dm_events WHERE message_id = %s",
+            (message_id,),
+        ).fetchone()
+    assert row == ("sending", None)
