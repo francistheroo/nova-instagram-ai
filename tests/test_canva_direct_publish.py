@@ -1,6 +1,18 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+import pytest
+import app.security as security
+
+
+@pytest.fixture(autouse=True)
+def allow_authenticated_admin_in_unit_tests():
+    app.dependency_overrides[security.require_user] = lambda: True
+    app.dependency_overrides[security.require_master_enabled] = lambda: True
+    yield
+    app.dependency_overrides.pop(security.require_user, None)
+    app.dependency_overrides.pop(security.require_master_enabled, None)
+
 
 client = TestClient(app)
 
@@ -110,3 +122,35 @@ def test_direct_canva_reel_publish_does_not_publish_before_finished(monkeypatch)
     assert response.status_code == 409
     assert response.json()["detail"]["published"] is False
     assert not any(path == "user_123/media_publish" for _, path in calls)
+
+
+def test_direct_canva_reel_publish_requires_admin_login(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+
+    response = client.post(
+        "/canva/instagram-reels/publish",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"design_id": "design_123", "caption": "Hello"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_direct_canva_reel_publish_requires_master_switch(monkeypatch):
+    app.dependency_overrides.pop(security.require_master_enabled, None)
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    response = client.post(
+        "/canva/instagram-reels/publish",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("nova-admin", "test-admin-password"),
+        json={"design_id": "design_123", "caption": "Hello"},
+    )
+    assert response.status_code == 503
+    assert "master switch is OFF" in response.json()["detail"]
