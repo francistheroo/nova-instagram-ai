@@ -76,6 +76,21 @@ def _claim_slot(local_date, kind, slot, daily_limit):
         return row[0] if row else False
 
 
+
+def _due_local_slots(now: datetime) -> dict[str, object]:
+    """Map due minute labels to their own local calendar dates.
+
+    The previous-minute catch-up can cross midnight; its slot must remain
+    associated with yesterday's date rather than being claimed under today.
+    """
+    current_minute = now.replace(second=0, microsecond=0)
+    previous_minute = current_minute - timedelta(minutes=1)
+    return {
+        current_minute.strftime("%H:%M"): current_minute.date(),
+        previous_minute.strftime("%H:%M"): previous_minute.date(),
+    }
+
+
 def _finish(run_id, status, media_id=None, error_code=None):
     with psycopg.connect(_db_url(), connect_timeout=10) as conn:
         conn.execute(
@@ -159,7 +174,7 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                 if master_enabled() and settings.get("direct_publish_enabled") is True:
                     zone = ZoneInfo(os.getenv("NOVA_TIMEZONE", "Asia/Kolkata"))
                     now = datetime.now(zone)
-                    due_slots = {now.strftime("%H:%M"), (now - timedelta(minutes=1)).strftime("%H:%M")}
+                    due_slots = _due_local_slots(now)
                     schedules = (
                         ("post", settings.get("post_times", ["09:00"]), int(settings.get("max_posts_per_day", 3))),
                         ("story", settings.get("story_times", ["13:00"]), int(settings.get("max_stories_per_day", 3))),
@@ -170,7 +185,8 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                         for due in times:
                             if due not in due_slots:
                                 continue
-                            run_id = await asyncio.to_thread(_claim_slot, now.date(), kind, due, cap)
+                            slot_date = due_slots[due]
+                            run_id = await asyncio.to_thread(_claim_slot, slot_date, kind, due, cap)
                             if not run_id:
                                 continue
                             try:
