@@ -8,22 +8,23 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 | Area | Result | Evidence | Notes |
 |---|---|---|---|
-| Main test suite | PASS | [Actions run #266](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41199604041) | 456 passed, 6 skipped, 38 warnings, 0 failed. |
+| Latest main test workflow | PASS | [Actions run #271](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41200649194) | Main-branch workflow completed successfully; all steps including the test step passed. |
+| Main test suite with published count | PASS | [Actions run #266](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41199604041) | 456 passed, 6 skipped, 38 warnings, 0 failed. |
 | Admin/API-key test setup | PASS | [PR #97](https://github.com/francistheroo/nova-instagram-ai/pull/97) | Fixed missing test API key/header and admin environment setup. PR merged. |
 | Webhook sender-ID validation | PASS + MERGED | [PR #98](https://github.com/francistheroo/nova-instagram-ai/pull/98) · [Actions run #267](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41199926158) | CI passed; regression tests cover blank, whitespace, invalid-character, and oversized sender IDs. PR merged to main. |
 | Checkpoint documentation | PASS + MERGED | [PR #99](https://github.com/francistheroo/nova-instagram-ai/pull/99) · [Actions run #269](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41200379935) | Documentation-only PR; CI passed and PR merged. |
 | PR #95 / #96 test setup failures | FIXED | [PR #97](https://github.com/francistheroo/nova-instagram-ai/pull/97) | Earlier failures were caused by missing test environment setup, not proof of live Instagram failure. |
-| Historical main run #260 | FAIL (superseded) | [Actions run #260](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41198306363) | 450 passed, 1 failed, 6 skipped. The failure was invalid-recipient test setup (missing API key); later corrected by PR #97 and the later green main run #266. |
+| Historical main run #260 | FAIL (superseded) | [Actions run #260](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41198306363) | 450 passed, 1 failed, 6 skipped. The failure was invalid-recipient test setup (missing API key); later corrected by PR #97 and subsequent green main runs. |
 
-## Security PR status (not merged)
+## Security PR status
 
-| Item | Branch CI | PR status | Reference |
-|---|---|---|---|
-| Instagram read-route admin security | PASS on PR branch (run #252) | OPEN; GitHub currently reports merge conflict / not mergeable | [PR #94](https://github.com/francistheroo/nova-instagram-ai/pull/94) |
-| OAuth-start admin security | PASS on PR branch (run #229) | OPEN draft; branch is based on an older main commit and needs current-base review | [PR #85](https://github.com/francistheroo/nova-instagram-ai/pull/85) |
-| Broader Instagram API/admin/master-switch security | PASS on PR branch (run #225) | OPEN draft; overlaps with #85 and #94 and needs current-base review before merge | [PR #83](https://github.com/francistheroo/nova-instagram-ai/pull/83) |
+| Item | Final status | Current-main coverage / evidence |
+|---|---|---|
+| PR #94 — Instagram read-route admin security | CLOSED as superseded; not merged | Current main protects Instagram verify/media/comment reads and Reel status reads with admin authentication; invalid media/comment IDs are validated. [PR #94](https://github.com/francistheroo/nova-instagram-ai/pull/94) |
+| PR #85 — OAuth-start admin security | CLOSED as superseded; not merged | Instagram and Canva OAuth routers apply `Depends(require_user)`; tests include `test_instagram_oauth_start_requires_admin_login` and `test_canva_oauth_start_requires_admin_login`. [PR #85](https://github.com/francistheroo/nova-instagram-ai/pull/85) |
+| PR #83 — broader API/admin/master-switch security | CLOSED as superseded; not merged | Current main includes admin checks across Instagram, Reel, DM-memory, Canva API/review/direct-publish, and OAuth routes; action routes retain master-switch and automation gates, API-key checks use constant-time comparison, and Instagram IDs/recipient IDs are validated. [PR #83](https://github.com/francistheroo/nova-instagram-ai/pull/83) |
 
-Branch CI passing does not by itself mean these security changes are merged or safe to merge. Review/rebase overlaps and rerun CI against current main before merging.
+PRs #83, #85, and #94 were closed because their security changes are already represented in the current main implementation and tests. They were **not merged**; no duplicate or stale branch changes were introduced. Main workflow #271 passed after the checkpoint refresh. See the PR conversation comments for the file-by-file rationale.
 
 ## Not yet verified
 
