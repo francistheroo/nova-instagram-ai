@@ -24,6 +24,7 @@ from app.security import master_enabled
 
 router = APIRouter(prefix="/webhooks/instagram", tags=["Instagram webhook"])
 MAX_WEBHOOK_BODY_BYTES = 1_048_576
+MAX_DM_MESSAGE_CHARS = 4000
 
 
 def _secret(name: str) -> str:
@@ -102,6 +103,12 @@ async def receive_instagram_webhook(
                 raw_mid = message.get("mid")
                 message_id = raw_mid if isinstance(raw_mid, str) and 0 < len(raw_mid) <= 512 else None
                 if not (_valid_sender_id(sender_id) and isinstance(text, str) and text.strip()):
+                    continue
+                # Keep the webhook boundary aligned with dm_memory.store_dm_message().
+                # Oversized user input is terminally skipped rather than treated as a
+                # transient storage failure that Meta would retry indefinitely.
+                if len(text.strip()) > MAX_DM_MESSAGE_CHARS:
+                    skipped += 1
                     continue
 
                 # A stable Meta message ID is required for safe retry claims. Without
