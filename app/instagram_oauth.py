@@ -9,10 +9,11 @@ from urllib.parse import urlencode
 
 import httpx
 import psycopg
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
+from app.security import require_user
 from app.oauth_utils import token_expiry_from_seconds
 from app.oauth_store import (
     OAuthStoreError,
@@ -24,7 +25,7 @@ from app.oauth_store import (
     load_latest_instagram_token,
 )
 
-router = APIRouter(prefix="/oauth/instagram", tags=["Instagram OAuth"])
+router = APIRouter(prefix="/oauth/instagram", tags=["Instagram OAuth"], dependencies=[Depends(require_user)])
 STATE_COOKIE = "nova_instagram_oauth_state"
 STATE_MAX_AGE_SECONDS = 600
 DEFAULT_SCOPES = "instagram_business_basic,instagram_business_manage_messages"
