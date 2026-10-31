@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import app.auto_publisher as publisher
 
@@ -54,3 +55,24 @@ def test_daily_limit_blocks_new_slot_when_processing_and_published_fill_cap(monk
 
     assert run_id is False
     assert not any("INSERT INTO nova_auto_publish_runs" in sql for sql, _ in connection.statements)
+
+
+
+def test_previous_minute_slot_uses_previous_local_date_at_midnight():
+    now = datetime(2026, 10, 31, 0, 0, 15, tzinfo=ZoneInfo("Asia/Kolkata"))
+
+    slots = publisher._due_local_slots(now)
+
+    assert slots["00:00"] == date(2026, 10, 31)
+    assert slots["23:59"] == date(2026, 10, 30)
+
+
+def test_current_and_previous_schedule_slots_keep_their_local_date():
+    now = datetime(2026, 10, 31, 18, 30, 45, tzinfo=ZoneInfo("Asia/Kolkata"))
+
+    slots = publisher._due_local_slots(now)
+
+    assert slots == {
+        "18:30": date(2026, 10, 31),
+        "18:29": date(2026, 10, 31),
+    }
