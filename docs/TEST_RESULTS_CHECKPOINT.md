@@ -6,6 +6,8 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 ## Latest verified results
 
+| Scheduled publish ambiguity protection | PASS + MERGED | [PR #111](https://github.com/francistheroo/nova-instagram-ai/pull/111) · [CI #41204551914](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41204551914) | Added an `uncertain` publish state for ambiguous Meta publish outcomes; uncertain runs reserve daily capacity and are not automatically retried. Existing schema constraint is migrated without deleting history. Tests passed; merged as `0015dd0b1d0110508dc3eebccf3584160d72a65a`. No live publishing occurred. |
+
 | Checkpoint PR #107 | PASS + MERGED | [PR #107](https://github.com/francistheroo/nova-instagram-ai/pull/107) · [CI #41203446639](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203446639) | Records PR #106 retry-safety merge and passing CI; merged as `2d21d68640c174866081da9b2aafa0670fa1b424`. |
 | Scheduler startup/health readiness | PASS + MERGED | [PR #108](https://github.com/francistheroo/nova-instagram-ai/pull/108) · [CI #41203747682](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203747682) | Scheduler no longer starts without DATABASE_URL; /health reports database_not_configured and actual task state. Added startup/health regression tests; merged as `24d82c50f7438f97aa64b6cd10aad23e029d3670`. |
 
