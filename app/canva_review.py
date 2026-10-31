@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.canva_api import _canva_request, require_nova_key
+from app.security import require_user, require_master_enabled
 
-router = APIRouter(prefix="/canva", tags=["Canva Instagram review"])
+router = APIRouter(prefix="/canva", tags=["Canva Instagram review"], dependencies=[Depends(require_user)])
 
 
 class InstagramDraftExportRequest(BaseModel):
@@ -119,7 +120,7 @@ async def get_instagram_draft_export(
     }
 
 
-@router.post("/instagram-reel-drafts/{job_id}")
+@router.post("/instagram-reel-drafts/{job_id}", dependencies=[Depends(require_master_enabled)])
 async def create_instagram_reel_draft_from_canva_export(
     job_id: str,
     body: CreateInstagramReelFromExportRequest,
