@@ -6,6 +6,9 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 ## Latest verified results
 
+| Meta DM send-response classification | PASS + MERGED | [PR #105](https://github.com/francistheroo/nova-instagram-ai/pull/105) · [CI run #41203236563](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203236563) | HTTP 408/429 are retryable; other 3xx/4xx are terminally ignored; 5xx are marked uncertain to avoid possible duplicate sends. Regression tests cover 400, 401, 403, 429, and 503. Merged as `afffb468ab69013a95cb308bd354c6740ef760cb`. No live Instagram messages sent. |
+| Webhook/scheduler audit checkpoint | PASS + MERGED | [PR #104](https://github.com/francistheroo/nova-instagram-ai/pull/104) · [CI run #41203039316](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203039316) | Documents current webhook idempotency coverage and remaining concurrency verification; records scheduler stale-processing and missed-slot policy limitations. Merged as `a9599c96bf2dd1499f660a5ef9e9bc7332e72d46`. |
+
 | Area | Result | Evidence | Notes |
 |---|---|---|---|
 | Latest main test workflow | PASS | [Actions run #271](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41200649194) | Main-branch workflow completed successfully; all steps including the test step passed. |
@@ -32,13 +35,13 @@ This file tracks verified repository/CI checks separately from live Instagram in
 | PR #85 — OAuth-start admin security | CLOSED as superseded; not merged | Instagram and Canva OAuth routers apply `Depends(require_user)`; tests include `test_instagram_oauth_start_requires_admin_login` and `test_canva_oauth_start_requires_admin_login`. [PR #85](https://github.com/francistheroo/nova-instagram-ai/pull/85) |
 | PR #83 — broader API/admin/master-switch security | CLOSED as superseded; not merged | Current main includes admin checks across Instagram, Reel, DM-memory, Canva API/review/direct-publish, and OAuth routes; action routes retain master-switch and automation gates, API-key checks use constant-time comparison, and Instagram IDs/recipient IDs are validated. [PR #83](https://github.com/francistheroo/nova-instagram-ai/pull/83) |
 
-PRs #83, #85, and #94 were closed because their security changes are already represented in the current main implementation and tests. They were **not merged**; no duplicate or stale branch changes were introduced. Main workflow #271 passed after the checkpoint refresh. See the PR conversation comments for the file-by-file rationale.
+PRs #83, #85, and #94 were closed because their security changes are already represented in the current main implementation and tests. They were **not merged**; no duplicate or stale branch changes were introduced. Main workflow #271 passed after the checkpoint refresh. PR #104 CI run #41203039316 and PR #105 CI run #41203236563 also passed. See the PR conversation comments for the file-by-file rationale.
 
 ## Not yet verified
 
 - Webhook duplicate/idempotency review: existing tests cover duplicate message IDs, retryable AI/Meta failures, post-send history failure, and ambiguous send timeout; further concurrent-delivery/database integration testing remains pending.
 - Scheduler reliability: existing tests cover daily-cap reservation and midnight local-date handling. Stale `processing` publish rows intentionally are not auto-reclaimed because Meta may already have accepted a publish before a worker crash; they need an explicit reconciliation policy. Downtime longer than the one-minute catch-up window can miss a slot; decide whether missed slots should be skipped or backfilled.
-- Ambiguous outbound DM delivery: ensure uncertain sends are not automatically resent.
+- Ambiguous outbound DM delivery remains a manual-reconciliation case: send timeouts and Meta HTTP 5xx responses are marked uncertain and are not automatically resent. No automated reconciliation UI/workflow is implemented.
 - Scheduler daily limits and timezone boundary cases beyond the already merged midnight-slot fix.
 - Live Meta OAuth authorization and token exchange.
 - Live webhook verification/subscription and real test-message ingestion.
