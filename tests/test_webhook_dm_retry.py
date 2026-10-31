@@ -310,8 +310,9 @@ def test_permanent_or_ambiguous_meta_send_failures_are_not_retried(
     monkeypatch.setattr(webhook, "generate_dm_reply", generate)
 
     class Response:
-        status_code = status_code
-        is_success = False
+        def __init__(self):
+            self.status_code = status_code
+            self.is_success = False
 
     class FakeClient:
         async def __aenter__(self):
