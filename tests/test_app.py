@@ -66,11 +66,14 @@ def test_protected_media_route_rejects_missing_key(monkeypatch):
 
 def test_protected_media_route_requires_instagram_configuration(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     monkeypatch.delenv("INSTAGRAM_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("INSTAGRAM_USER_ID", raising=False)
     response = client.get(
         "/instagram/media",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("test-admin", "test-password"),
     )
     assert response.status_code == 503
     assert "not connected" in response.json()["detail"]
@@ -105,6 +108,8 @@ def test_verify_route_returns_profile_from_meta(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "fake-token-for-test")
     monkeypatch.setenv("INSTAGRAM_USER_ID", "123456")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
 
     async def fake_meta_request(method, path, *, params=None, data=None):
         assert method == "GET"
@@ -113,7 +118,7 @@ def test_verify_route_returns_profile_from_meta(monkeypatch):
         return {"id": "123456", "username": "nova_test"}
 
     monkeypatch.setattr(main_module, "meta_request", fake_meta_request)
-    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"})
+    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"}, auth=("test-admin", "test-password"))
     assert response.status_code == 200
     assert response.json() == {"connected": True, "profile_id": "123456", "username": "nova_test"}
 
@@ -143,6 +148,8 @@ def test_verify_route_rejects_malformed_meta_profile(monkeypatch, profile):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "fake-token-for-test")
     monkeypatch.setenv("INSTAGRAM_USER_ID", "123456")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
 
     async def fake_meta_request(method, path, *, params=None, data=None):
         assert method == "GET"
@@ -153,6 +160,7 @@ def test_verify_route_rejects_malformed_meta_profile(monkeypatch, profile):
     response = client.get(
         "/instagram/verify",
         headers={"X-NOVA-API-Key": "test-secret"},
+        auth=("test-admin", "test-password"),
     )
 
     assert response.status_code == 502
@@ -230,3 +238,20 @@ def test_instagram_message_reply_rejects_invalid_recipient_id(monkeypatch):
         json={"recipient_id": "bad/id", "message": "Hello"},
     )
     assert response.status_code == 422
+
+
+
+def test_protected_media_route_requires_admin_login_even_with_api_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    response = client.get("/instagram/media", headers={"X-NOVA-API-Key": "test-secret"})
+    assert response.status_code == 401
+
+
+def test_verify_route_requires_admin_login_even_with_api_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
+    response = client.get("/instagram/verify", headers={"X-NOVA-API-Key": "test-secret"})
+    assert response.status_code == 401
