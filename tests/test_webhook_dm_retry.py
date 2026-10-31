@@ -128,12 +128,14 @@ def test_meta_send_failure_can_retry_same_message(monkeypatch):
     monkeypatch.setattr(webhook, "generate_dm_reply", generate)
 
     class Response:
-        def __init__(self, is_success):
-            self.is_success = is_success
+        def __init__(self, status_code):
+            self.status_code = status_code
+            self.is_success = 200 <= status_code < 300
 
     class FakeClient:
         def __init__(self):
-            self.responses = [Response(False), Response(True)]
+            # Rate limiting is an explicit rejection and can safely be retried.
+            self.responses = [Response(429), Response(200)]
 
         async def __aenter__(self):
             return self
@@ -274,3 +276,63 @@ def test_meta_send_timeout_is_not_automatically_retried(monkeypatch):
     assert send_attempts == [1]
     assert sending == ["mid.retry.1"]
     assert finishes == [("mid.retry.1", "uncertain")]
+
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    "status_code,expected_state,expected_uncertain",
+    [(400, "ignored", False), (401, "ignored", False), (403, "ignored", False), (503, "uncertain", True)],
+)
+def test_permanent_or_ambiguous_meta_send_failures_are_not_retried(
+    monkeypatch, status_code, expected_state, expected_uncertain
+):
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "test-token")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "ig-user-1")
+
+    finishes = []
+    send_attempts = []
+    monkeypatch.setattr(webhook, "claim_dm_event", lambda _mid: True)
+    monkeypatch.setattr(
+        webhook, "finish_dm_event",
+        lambda mid, status: finishes.append((mid, status)),
+    )
+    monkeypatch.setattr(webhook, "mark_dm_event_sending", lambda _mid: None)
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *args, **kwargs: "stored")
+
+    async def generate(*args):
+        return "Hello! How can I help?"
+
+    monkeypatch.setattr(webhook, "generate_dm_reply", generate)
+
+    class Response:
+        def __init__(self):
+            self.status_code = status_code
+            self.is_success = False
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            send_attempts.append(1)
+            return Response()
+
+    monkeypatch.setattr(webhook.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+
+    response = post_event(secret)
+
+    assert response.status_code == 200
+    assert finishes == [("mid.retry.1", expected_state)]
+    assert send_attempts == [1]
+    if expected_uncertain:
+        assert response.json()["automatic_replies_uncertain"] == 1
+    else:
+        assert "automatic_replies_uncertain" not in response.json()
