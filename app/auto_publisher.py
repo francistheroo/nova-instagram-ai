@@ -61,7 +61,7 @@ def _claim_slot(local_date, kind, slot, daily_limit):
             (f"nova-auto-publish:{local_date}:{kind}",),
         )
         count = conn.execute(
-            "SELECT COUNT(*) FROM nova_auto_publish_runs WHERE local_date=%s AND content_type=%s AND status='published'",
+            "SELECT COUNT(*) FROM nova_auto_publish_runs WHERE local_date=%s AND content_type=%s AND status IN ('processing','published')",
             (local_date, kind),
         ).fetchone()[0]
         if count >= daily_limit:
