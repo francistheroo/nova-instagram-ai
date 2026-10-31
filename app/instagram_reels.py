@@ -70,7 +70,7 @@ async def create_reel_draft(body: ReelDraftRequest, _: bool = Depends(_require_n
 
 
 @router.get("/drafts/{container_id}")
-async def get_reel_draft_status(container_id: str, _: bool = Depends(_require_nova_key)):
+async def get_reel_draft_status(container_id: str, _: bool = Depends(_require_nova_key), __: bool = Depends(require_user)):
     """Read Meta's processing status without publishing the Reel."""
     if not _CONTAINER_ID.fullmatch(container_id):
         raise HTTPException(status_code=422, detail="Invalid Reel container ID.")
