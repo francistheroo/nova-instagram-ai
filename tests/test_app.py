@@ -229,6 +229,7 @@ def test_instagram_comment_reply_rejects_invalid_comment_id(monkeypatch):
 
 
 def test_instagram_message_reply_rejects_invalid_recipient_id(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("NOVA_ADMIN_USERNAME", "test-admin")
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-password")
     monkeypatch.setitem(app.dependency_overrides, security.require_master_enabled, lambda: True)
