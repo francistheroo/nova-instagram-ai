@@ -235,6 +235,7 @@ def test_instagram_message_reply_rejects_invalid_recipient_id(monkeypatch):
     monkeypatch.setitem(app.dependency_overrides, security.require_master_enabled, lambda: True)
     response = client.post(
         "/instagram/messages/reply",
+        headers={"X-NOVA-API-Key": "test-secret"},
         auth=("test-admin", "test-password"),
         json={"recipient_id": "bad/id", "message": "Hello"},
     )
