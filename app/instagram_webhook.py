@@ -15,6 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from app.dm_memory import (
     claim_dm_event,
     finish_dm_event,
+    mark_dm_event_sending,
     generate_dm_reply,
     store_dm_message,
 )
@@ -179,10 +180,11 @@ async def receive_instagram_webhook(
 
                     graph_base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
                     version = os.getenv("META_API_VERSION", "v25.0").strip("/")
+                    # Persist a non-reclaimable state before the request. A worker
+                    # crash after Meta accepts the message must not trigger a duplicate.
+                    mark_dm_event_sending(message_id)
+                    send_attempted = True
                     async with httpx.AsyncClient(timeout=30.0) as client:
-                        # Once a request is sent, a timeout has an ambiguous outcome:
-                        # Meta may have accepted it even if the response was lost.
-                        send_attempted = True
                         response = await client.post(
                             f"{graph_base}/{version}/{user_id}/messages",
                             headers={"Authorization": f"Bearer {token}"},
