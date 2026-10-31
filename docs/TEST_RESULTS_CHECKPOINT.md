@@ -6,6 +6,9 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 ## Latest verified results
 
+| Checkpoint PR #107 | PASS + MERGED | [PR #107](https://github.com/francistheroo/nova-instagram-ai/pull/107) · [CI #41203446639](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203446639) | Records PR #106 retry-safety merge and passing CI; merged as `2d21d68640c174866081da9b2aafa0670fa1b424`. |
+| Scheduler startup/health readiness | PASS + MERGED | [PR #108](https://github.com/francistheroo/nova-instagram-ai/pull/108) · [CI #41203747682](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203747682) | Scheduler no longer starts without DATABASE_URL; /health reports database_not_configured and actual task state. Added startup/health regression tests; merged as `24d82c50f7438f97aa64b6cd10aad23e029d3670`. |
+
 | Checkpoint after PR #105 | PASS + MERGED | [PR #106](https://github.com/francistheroo/nova-instagram-ai/pull/106) · [CI run #41203349695](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203349695) | Records merged webhook retry classification, successful CI, and remaining manual reconciliation/scheduler limitations. Merged as `4204943d2d874a56d5ccb2b8a613739c25a8f195`. |
 
 | Meta DM send-response classification | PASS + MERGED | [PR #105](https://github.com/francistheroo/nova-instagram-ai/pull/105) · [CI run #41203236563](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203236563) | HTTP 408/429 are retryable; other 3xx/4xx are terminally ignored; 5xx are marked uncertain to avoid possible duplicate sends. Regression tests cover 400, 401, 403, 429, and 503. Merged as `afffb468ab69013a95cb308bd354c6740ef760cb`. No live Instagram messages sent. |
@@ -49,6 +52,7 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 - Live webhook verification/subscription and real test-message ingestion.
 - Live Instagram publishing permissions and end-to-end publish test.
 - Production deployment, persistent worker operation, and emergency-stop behavior.
+- Live Meta OAuth, webhook subscription/delivery, approved permissions, real DM replies, and live publishing remain unverified; CI does not prove external account readiness.
 
 ## Rules for updating this checkpoint
 
