@@ -137,8 +137,32 @@ def test_memory_store_rejects_invalid_message_ids_before_database_access(postgre
 
 
 def test_finish_rejects_invalid_state_and_message_id_before_database_access(postgres_db):
-    with pytest.raises(ValueError, match="status must be sent, retryable, or ignored"):
+    with pytest.raises(ValueError, match="status must be sent, retryable, ignored, or uncertain"):
         dm_memory.finish_dm_event("integration.bad-status", "processing")
 
     with pytest.raises(ValueError, match="invalid Meta message ID"):
         dm_memory.finish_dm_event("", "sent")
+
+
+def test_uncertain_send_state_is_not_reclaimed(postgres_db):
+    message_id = "integration.uncertain.send"
+    assert dm_memory.claim_dm_event(message_id) is True
+
+    dm_memory.finish_dm_event(message_id, "uncertain")
+
+    assert dm_memory.claim_dm_event(message_id) is False
+
+
+def test_sending_state_is_not_reclaimed_after_worker_crash(postgres_db):
+    message_id = "integration.sending.crash"
+    assert dm_memory.claim_dm_event(message_id) is True
+
+    dm_memory.mark_dm_event_sending(message_id)
+
+    assert dm_memory.claim_dm_event(message_id) is False
+    with psycopg.connect(postgres_db) as conn:
+        row = conn.execute(
+            "SELECT status, lease_until FROM nova_instagram_dm_events WHERE message_id = %s",
+            (message_id,),
+        ).fetchone()
+    assert row == ("sending", None)

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import psycopg
 import pytest
 
-from app.dm_memory import _connect, claim_dm_event, finish_dm_event, initialize_schema
+from app.dm_memory import _connect, claim_dm_event, finish_dm_event, initialize_schema, mark_dm_event_sending
 
 
 TEST_DATABASE_URL = os.getenv("NOVA_TEST_DATABASE_URL", "").strip()
@@ -66,4 +66,18 @@ def test_retryable_event_can_be_claimed_again(test_database):
 
 def test_processing_event_cannot_be_claimed_before_lease_expires(test_database):
     assert claim_dm_event(test_database) is True
+    assert claim_dm_event(test_database) is False
+
+
+def test_uncertain_event_is_terminal_and_not_reclaimed(test_database):
+    assert claim_dm_event(test_database) is True
+    finish_dm_event(test_database, "uncertain")
+
+    assert claim_dm_event(test_database) is False
+
+
+def test_sending_event_is_not_reclaimed_after_processing_lease_would_expire(test_database):
+    assert claim_dm_event(test_database) is True
+    mark_dm_event_sending(test_database)
+
     assert claim_dm_event(test_database) is False

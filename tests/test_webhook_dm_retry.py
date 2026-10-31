@@ -213,3 +213,64 @@ def test_accepted_reply_is_not_retried_when_assistant_history_write_fails(monkey
     assert response.json()["automatic_replies_skipped"] == 0
     assert finishes == [("mid.retry.1", "sent")]
     assert [call[1] for call in store_calls] == ["user", "assistant"]
+
+
+def test_meta_send_timeout_is_not_automatically_retried(monkeypatch):
+    """A lost response after send attempt must not risk a duplicate DM."""
+    secret = "test-app-secret"
+    monkeypatch.setenv("META_APP_SECRET", secret)
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setenv("INSTAGRAM_ACCESS_TOKEN", "test-token")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "ig-user-1")
+
+    claimed = {"value": False}
+    finishes = []
+    send_attempts = []
+    sending = []
+    monkeypatch.setattr(
+        webhook, "mark_dm_event_sending",
+        lambda message_id: sending.append(message_id),
+    )
+
+    def claim(_message_id):
+        if claimed["value"]:
+            return False
+        claimed["value"] = True
+        return True
+
+    monkeypatch.setattr(webhook, "claim_dm_event", claim)
+    monkeypatch.setattr(
+        webhook, "finish_dm_event",
+        lambda mid, status: finishes.append((mid, status)),
+    )
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *args, **kwargs: "stored")
+
+    async def generate(*args):
+        return "Hello! How can I help?"
+
+    monkeypatch.setattr(webhook, "generate_dm_reply", generate)
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            send_attempts.append(1)
+            raise TimeoutError("response lost after request was sent")
+
+    monkeypatch.setattr(webhook.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+
+    first = post_event(secret)
+    second = post_event(secret)
+
+    assert first.status_code == 200
+    assert first.json()["automatic_replies_uncertain"] == 1
+    assert second.status_code == 200
+    assert second.json()["automatic_replies_sent"] == 0
+    assert second.json()["automatic_replies_skipped"] == 1
+    assert send_attempts == [1]
+    assert sending == ["mid.retry.1"]
+    assert finishes == [("mid.retry.1", "uncertain")]
