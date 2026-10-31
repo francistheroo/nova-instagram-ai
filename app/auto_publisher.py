@@ -34,13 +34,23 @@ def initialize_scheduler_schema():
                 local_date DATE NOT NULL,
                 content_type TEXT NOT NULL CHECK (content_type IN ('post','story')),
                 slot TEXT NOT NULL,
-                status TEXT NOT NULL CHECK (status IN ('processing','published','failed')),
+                status TEXT NOT NULL CHECK (status IN ('processing','published','failed','uncertain')),
                 media_id TEXT,
                 error_code TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE (local_date, content_type, slot)
             )
+        """)
+        # Migrate existing installations without discarding publish history.
+        conn.execute("""
+            ALTER TABLE nova_auto_publish_runs
+            DROP CONSTRAINT IF EXISTS nova_auto_publish_runs_status_check
+        """)
+        conn.execute("""
+            ALTER TABLE nova_auto_publish_runs
+            ADD CONSTRAINT nova_auto_publish_runs_status_check
+            CHECK (status IN ('processing','published','failed','uncertain'))
         """)
 
 
@@ -61,7 +71,7 @@ def _claim_slot(local_date, kind, slot, daily_limit):
             (f"nova-auto-publish:{local_date}:{kind}",),
         )
         count = conn.execute(
-            "SELECT COUNT(*) FROM nova_auto_publish_runs WHERE local_date=%s AND content_type=%s AND status IN ('processing','published')",
+            "SELECT COUNT(*) FROM nova_auto_publish_runs WHERE local_date=%s AND content_type=%s AND status IN ('processing','published','uncertain')",
             (local_date, kind),
         ).fetchone()[0]
         if count >= daily_limit:
@@ -98,6 +108,10 @@ def _finish(run_id, status, media_id=None, error_code=None):
                updated_at=NOW() WHERE id=%s""",
             (status, media_id, error_code, run_id),
         )
+
+
+class PublishOutcomeUncertain(RuntimeError):
+    """Meta may have accepted a publish but NOVA cannot confirm its media ID."""
 
 
 async def _generate_and_publish(kind, meta_request, instagram_config):
@@ -152,12 +166,17 @@ async def _generate_and_publish(kind, meta_request, instagram_config):
     creation_id = container.get("id")
     if not creation_id:
         raise RuntimeError("meta_container_creation_failed")
-    published = await meta_request(
-        "POST", f"{user_id}/media_publish", data={"creation_id": creation_id}
-    )
-    media_id = published.get("id")
+    try:
+        published = await meta_request(
+            "POST", f"{user_id}/media_publish", data={"creation_id": creation_id}
+        )
+    except Exception:
+        # A timeout or upstream error may happen after Meta accepted the publish.
+        # Never label this as a definite failure or automatically retry it.
+        raise PublishOutcomeUncertain("meta_publish_outcome_uncertain") from None
+    media_id = published.get("id") if isinstance(published, dict) else None
     if not media_id:
-        raise RuntimeError("meta_publish_not_confirmed")
+        raise PublishOutcomeUncertain("meta_publish_not_confirmed")
     return str(media_id)
 
 
@@ -192,6 +211,8 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                             try:
                                 media_id = await _generate_and_publish(kind, meta_request, instagram_config)
                                 await asyncio.to_thread(_finish, run_id, "published", media_id, None)
+                            except PublishOutcomeUncertain as exc:
+                                await asyncio.to_thread(_finish, run_id, "uncertain", None, str(exc)[:80])
                             except AIProviderUnavailable:
                                 await asyncio.to_thread(_finish, run_id, "failed", None, "ai_provider_unavailable")
                             except Exception as exc:
