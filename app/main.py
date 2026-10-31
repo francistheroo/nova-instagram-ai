@@ -49,17 +49,23 @@ app.include_router(admin_router)
 @app.on_event("startup")
 async def start_auto_publisher():
     # The durable scheduler is opt-in and never starts from an API request.
-    if os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true":
-        from app.auto_publisher import initialize_scheduler_schema
-        try:
-            initialize_scheduler_schema()
-            app.state.nova_scheduler_stop = asyncio.Event()
-            app.state.nova_scheduler_task = asyncio.create_task(
-                scheduler_loop(meta_request, instagram_config, app.state.nova_scheduler_stop)
-            )
-        except Exception:
-            # Keep the API available; /health reports scheduler readiness separately.
-            app.state.nova_scheduler_error = "scheduler_initialization_failed"
+    if os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() != "true":
+        return
+    if not os.getenv("DATABASE_URL", "").strip():
+        # Do not report a task as running when it cannot read durable settings.
+        app.state.nova_scheduler_error = "database_not_configured"
+        return
+    from app.auto_publisher import initialize_scheduler_schema
+    try:
+        initialize_scheduler_schema()
+        app.state.nova_scheduler_error = None
+        app.state.nova_scheduler_stop = asyncio.Event()
+        app.state.nova_scheduler_task = asyncio.create_task(
+            scheduler_loop(meta_request, instagram_config, app.state.nova_scheduler_stop)
+        )
+    except Exception:
+        # Keep the API available; /health reports scheduler readiness separately.
+        app.state.nova_scheduler_error = "scheduler_initialization_failed"
 
 
 @app.on_event("shutdown")
@@ -200,7 +206,11 @@ async def health():
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
         "auto_scheduler_enabled": os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true",
         "ai_master_enabled": master_enabled(),
-        "auto_scheduler_running": hasattr(app.state, "nova_scheduler_task"),
+        "auto_scheduler_running": (
+            hasattr(app.state, "nova_scheduler_task")
+            and not app.state.nova_scheduler_task.done()
+        ),
+        "auto_scheduler_error": getattr(app.state, "nova_scheduler_error", None),
         "instagram_auto_dm_replies_enabled": os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true",
         "ai_configured": bool(configured_provider_names()),
         "ai_providers_configured": configured_provider_names(),
