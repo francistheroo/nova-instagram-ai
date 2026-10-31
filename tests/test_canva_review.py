@@ -211,6 +211,7 @@ def test_canva_reel_draft_requires_master_switch(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
     monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     response = client.post(
         "/canva/instagram-reel-drafts/job_mp4",
