@@ -146,6 +146,7 @@ def test_direct_canva_reel_publish_requires_master_switch(monkeypatch):
     monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
     monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     response = client.post(
         "/canva/instagram-reels/publish",
         headers={"X-NOVA-API-Key": "test-secret"},
