@@ -67,3 +67,10 @@ def test_retryable_event_can_be_claimed_again(test_database):
 def test_processing_event_cannot_be_claimed_before_lease_expires(test_database):
     assert claim_dm_event(test_database) is True
     assert claim_dm_event(test_database) is False
+
+
+def test_uncertain_event_is_terminal_and_not_reclaimed(test_database):
+    assert claim_dm_event(test_database) is True
+    finish_dm_event(test_database, "uncertain")
+
+    assert claim_dm_event(test_database) is False
