@@ -6,7 +6,7 @@ are true and the protected admin setting direct_publish_enabled is enabled.
 import asyncio
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -77,7 +77,7 @@ def _claim_slot(local_date, kind, slot, daily_limit):
 
 
 
-def _due_local_slots(now: datetime) -> dict[str, object]:
+def _due_local_slots(now: datetime) -> dict[str, date]:
     """Map due minute labels to their own local calendar dates.
 
     The previous-minute catch-up can cross midnight; its slot must remain
