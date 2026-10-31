@@ -558,3 +558,13 @@ def test_webhook_does_not_store_unicode_or_control_whitespace_only_text(monkeypa
     })
     assert response.status_code == 200
     assert response.json()["stored_text_messages"] == 0
+
+
+def test_webhook_rejects_oversized_payload_before_signature_check(monkeypatch):
+    monkeypatch.setenv("META_APP_SECRET", "test-app-secret")
+    payload = b"x" * (webhook.MAX_WEBHOOK_BODY_BYTES + 1)
+
+    response = client.post("/webhooks/instagram", content=payload)
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Webhook payload exceeds the 1 MiB limit."
