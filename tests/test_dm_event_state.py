@@ -59,3 +59,13 @@ def test_claim_dm_event_returns_false_when_event_is_already_claimed(monkeypatch)
 def test_finish_dm_event_only_allows_terminal_or_retryable_status():
     with pytest.raises(ValueError):
         memory.finish_dm_event("mid.1", "processing")
+
+
+def test_finish_dm_event_accepts_uncertain_terminal_state(monkeypatch):
+    connection = install_connection(monkeypatch, {"message_id": "mid.uncertain"})
+
+    memory.finish_dm_event("mid.uncertain", "uncertain")
+
+    query, params = connection.calls[0]
+    assert "SET status = %s" in query
+    assert params[0] == "uncertain"
