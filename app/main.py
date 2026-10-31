@@ -291,7 +291,7 @@ async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __:
 
 
 @app.get("/instagram/verify")
-async def verify_instagram_connection(_: bool = Depends(require_nova_key)):
+async def verify_instagram_connection(_: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
     """Verify configured credentials against Meta and return the authorized profile identity."""
     _, user_id, _ = instagram_config()
     profile = await meta_request("GET", user_id, params={"fields": "id,username"})
@@ -301,7 +301,7 @@ async def verify_instagram_connection(_: bool = Depends(require_nova_key)):
 
 
 @app.get("/instagram/media")
-async def list_instagram_media(_: bool = Depends(require_nova_key)):
+async def list_instagram_media(_: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
     """List media available to the authorized Instagram professional account."""
     _, user_id, _ = instagram_config()
     return await meta_request(
@@ -312,7 +312,7 @@ async def list_instagram_media(_: bool = Depends(require_nova_key)):
 
 
 @app.get("/instagram/media/{media_id}/comments")
-async def list_comments(media_id: str, _: bool = Depends(require_nova_key)):
+async def list_comments(media_id: str, _: bool = Depends(require_nova_key), __: bool = Depends(require_user)):
     _validate_instagram_object_id(media_id)
     return await meta_request(
         "GET",
