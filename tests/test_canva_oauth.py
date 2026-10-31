@@ -718,3 +718,13 @@ def test_canva_design_api_requires_admin_even_with_api_key(monkeypatch):
     )
 
     assert response.status_code == 401
+
+
+def test_canva_oauth_start_requires_admin_login(monkeypatch):
+    app.dependency_overrides.pop(security.require_user, None)
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-admin-password")
+
+    response = client.get("/oauth/canva/start")
+
+    assert response.status_code == 401
