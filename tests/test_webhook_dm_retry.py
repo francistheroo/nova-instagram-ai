@@ -226,6 +226,11 @@ def test_meta_send_timeout_is_not_automatically_retried(monkeypatch):
     claimed = {"value": False}
     finishes = []
     send_attempts = []
+    sending = []
+    monkeypatch.setattr(
+        webhook, "mark_dm_event_sending",
+        lambda message_id: sending.append(message_id),
+    )
 
     def claim(_message_id):
         if claimed["value"]:
@@ -267,4 +272,5 @@ def test_meta_send_timeout_is_not_automatically_retried(monkeypatch):
     assert second.json()["automatic_replies_sent"] == 0
     assert second.json()["automatic_replies_skipped"] == 1
     assert send_attempts == [1]
+    assert sending == ["mid.retry.1"]
     assert finishes == [("mid.retry.1", "uncertain")]
