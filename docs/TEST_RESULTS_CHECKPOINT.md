@@ -9,12 +9,15 @@ This file tracks verified repository/CI checks separately from live Instagram in
 | Area | Result | Evidence | Notes |
 |---|---|---|---|
 | Latest main test workflow | PASS | [Actions run #271](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41200649194) | Main-branch workflow completed successfully; all steps including the test step passed. |
+| Latest main test workflow after PR #100 | PASS | [Actions run #41202333972](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202333972) | Main-branch workflow completed successfully after merge commit `b4fd434caeb2dc6641e6847c36780063d4e5a644`. |
 | Main test suite with published count | PASS | [Actions run #266](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41199604041) | 456 passed, 6 skipped, 38 warnings, 0 failed. |
 | Admin/API-key test setup | PASS | [PR #97](https://github.com/francistheroo/nova-instagram-ai/pull/97) | Fixed missing test API key/header and admin environment setup. PR merged. |
 | Webhook sender-ID validation | PASS + MERGED | [PR #98](https://github.com/francistheroo/nova-instagram-ai/pull/98) · [Actions run #267](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41199926158) | CI passed; regression tests cover blank, whitespace, invalid-character, and oversized sender IDs. PR merged to main. |
 | Checkpoint documentation | PASS + MERGED | [PR #99](https://github.com/francistheroo/nova-instagram-ai/pull/99) · [Actions run #269](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41200379935) | Documentation-only PR; CI passed and PR merged. |
 | PR #95 / #96 test setup failures | FIXED | [PR #97](https://github.com/francistheroo/nova-instagram-ai/pull/97) | Earlier failures were caused by missing test environment setup, not proof of live Instagram failure. |
 | Historical main run #260 | FAIL (superseded) | [Actions run #260](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41198306363) | 450 passed, 1 failed, 6 skipped. The failure was invalid-recipient test setup (missing API key); later corrected by PR #97 and subsequent green main runs. |
+
+| Oversized inbound DM text | PASS + MERGED | [PR #100](https://github.com/francistheroo/nova-instagram-ai/pull/100) · [PR CI #41202216448](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202216448) · [main CI #41202333972](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41202333972) | Webhook skips text above the existing 4,000-character storage limit before claiming an idempotency slot or writing memory; tests cover auto-replies on/off and exact-limit acceptance. Merged as `b4fd434caeb2dc6641e6847c36780063d4e5a644`. |
 
 ## Security PR status
 
@@ -28,7 +31,6 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 
 ## Not yet verified
 
-- Oversized inbound DM text handling and storage-boundary behavior.
 - Duplicate webhook delivery and idempotency under retries.
 - Ambiguous outbound DM delivery: ensure uncertain sends are not automatically resent.
 - Scheduler daily limits and timezone boundary cases beyond the already merged midnight-slot fix.
