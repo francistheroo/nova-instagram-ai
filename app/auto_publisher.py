@@ -6,6 +6,7 @@ are true and the protected admin setting direct_publish_enabled is enabled.
 import asyncio
 import json
 import os
+import re
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -61,6 +62,33 @@ def _settings():
     for key, value in rows:
         result[key] = value
     return result
+
+
+
+_SCHEDULE_TIME_RE = re.compile(r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+
+
+def _schedule_times(value, default):
+    """Return unique valid HH:MM slots; malformed admin values disable this schedule."""
+    if value is None:
+        value = default
+    if not isinstance(value, list):
+        return []
+    return list(dict.fromkeys(
+        item for item in value
+        if isinstance(item, str) and _SCHEDULE_TIME_RE.fullmatch(item)
+    ))
+
+
+def _daily_limit(value, default):
+    """Accept conservative integer caps only; invalid values disable publishing."""
+    if value is None:
+        value = default
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    if value < 0 or value > 20:
+        return 0
+    return value
 
 
 def _claim_slot(local_date, kind, slot, daily_limit):
@@ -195,8 +223,16 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                     now = datetime.now(zone)
                     due_slots = _due_local_slots(now)
                     schedules = (
-                        ("post", settings.get("post_times", ["09:00"]), int(settings.get("max_posts_per_day", 3))),
-                        ("story", settings.get("story_times", ["13:00"]), int(settings.get("max_stories_per_day", 3))),
+                        (
+                            "post",
+                            _schedule_times(settings.get("post_times"), ["09:00"]),
+                            _daily_limit(settings.get("max_posts_per_day"), 3),
+                        ),
+                        (
+                            "story",
+                            _schedule_times(settings.get("story_times"), ["13:00"]),
+                            _daily_limit(settings.get("max_stories_per_day"), 3),
+                        ),
                     )
                     for kind, times, cap in schedules:
                         if cap <= 0:
