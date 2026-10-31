@@ -69,6 +69,8 @@ def test_reel_draft_requires_https(monkeypatch):
 
 def test_reel_status_is_read_only(monkeypatch):
     monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", ADMIN[0])
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", ADMIN[1])
     from app import main
 
     async def fake_request(method, path, *, params=None, data=None):
@@ -150,3 +152,16 @@ def test_reel_draft_fails_closed_when_master_switch_is_off(monkeypatch):
     )
     assert response.status_code == 503
     assert "master switch is OFF" in response.json()["detail"]
+
+
+def test_reel_status_requires_admin_login_even_with_api_key(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("NOVA_ADMIN_USERNAME", ADMIN[0])
+    monkeypatch.setenv("NOVA_ADMIN_PASSWORD", ADMIN[1])
+
+    response = client.get(
+        "/instagram/reels/drafts/container_123",
+        headers=KEY,
+    )
+
+    assert response.status_code == 401
