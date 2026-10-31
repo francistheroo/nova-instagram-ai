@@ -230,8 +230,22 @@ async def receive_instagram_webhook(
                             # is preferable to asking Meta to redeliver and sending twice.
                             pass
                     else:
-                        finish_dm_event(message_id, "retryable")
-                        retry_requested = True
+                        status_code = response.status_code
+                        if status_code in (408, 429):
+                            # Explicit transient rejection: Meta did not accept the
+                            # request, so a webhook retry is safe and useful.
+                            finish_dm_event(message_id, "retryable")
+                            retry_requested = True
+                        elif 500 <= status_code < 600:
+                            # A server error can occur after the remote side has
+                            # processed a request. Do not risk sending the same DM
+                            # twice; leave it for manual reconciliation.
+                            finish_dm_event(message_id, "uncertain")
+                            uncertain += 1
+                        else:
+                            # Other 4xx/3xx responses are terminal until credentials,
+                            # permissions, or request configuration are corrected.
+                            finish_dm_event(message_id, "ignored")
                         skipped += 1
                 except Exception:
                     if send_attempted:
