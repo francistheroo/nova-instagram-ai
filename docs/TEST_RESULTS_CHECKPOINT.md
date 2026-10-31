@@ -6,6 +6,8 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 ## Latest verified results
 
+| Checkpoint after PR #105 | PASS + MERGED | [PR #106](https://github.com/francistheroo/nova-instagram-ai/pull/106) · [CI run #41203349695](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203349695) | Records merged webhook retry classification, successful CI, and remaining manual reconciliation/scheduler limitations. Merged as `4204943d2d874a56d5ccb2b8a613739c25a8f195`. |
+
 | Meta DM send-response classification | PASS + MERGED | [PR #105](https://github.com/francistheroo/nova-instagram-ai/pull/105) · [CI run #41203236563](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203236563) | HTTP 408/429 are retryable; other 3xx/4xx are terminally ignored; 5xx are marked uncertain to avoid possible duplicate sends. Regression tests cover 400, 401, 403, 429, and 503. Merged as `afffb468ab69013a95cb308bd354c6740ef760cb`. No live Instagram messages sent. |
 | Webhook/scheduler audit checkpoint | PASS + MERGED | [PR #104](https://github.com/francistheroo/nova-instagram-ai/pull/104) · [CI run #41203039316](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203039316) | Documents current webhook idempotency coverage and remaining concurrency verification; records scheduler stale-processing and missed-slot policy limitations. Merged as `a9599c96bf2dd1499f660a5ef9e9bc7332e72d46`. |
 
