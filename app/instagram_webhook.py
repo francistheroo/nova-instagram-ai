@@ -61,7 +61,7 @@ async def receive_instagram_webhook(
     except (json.JSONDecodeError, UnicodeDecodeError):
         raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
-    stored = sent = skipped = 0
+    stored = sent = skipped = uncertain = 0
     retry_requested = False
     auto_enabled = (os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true" and master_enabled())
     try:
@@ -148,6 +148,7 @@ async def receive_instagram_webhook(
                     skipped += 1
                     continue
 
+                send_attempted = False
                 try:
                     reply_text = (await generate_dm_reply(sender_id, text.strip())).strip()
                     if not reply_text:
@@ -179,6 +180,9 @@ async def receive_instagram_webhook(
                     graph_base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
                     version = os.getenv("META_API_VERSION", "v25.0").strip("/")
                     async with httpx.AsyncClient(timeout=30.0) as client:
+                        # Once a request is sent, a timeout has an ambiguous outcome:
+                        # Meta may have accepted it even if the response was lost.
+                        send_attempted = True
                         response = await client.post(
                             f"{graph_base}/{version}/{user_id}/messages",
                             headers={"Authorization": f"Bearer {token}"},
@@ -204,11 +208,14 @@ async def receive_instagram_webhook(
                         retry_requested = True
                         skipped += 1
                 except Exception:
-                    # A non-2xx response lets Meta retry this delivery. A timeout
-                    # after Meta accepts a send can still cause a duplicate; the
-                    # public API offers no general idempotency key for this send.
-                    finish_dm_event(message_id, "retryable")
-                    retry_requested = True
+                    if send_attempted:
+                        # Do not retry an ambiguous send automatically: the remote
+                        # service may have accepted it before the connection failed.
+                        finish_dm_event(message_id, "uncertain")
+                        uncertain += 1
+                    else:
+                        finish_dm_event(message_id, "retryable")
+                        retry_requested = True
                     skipped += 1
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -228,4 +235,5 @@ async def receive_instagram_webhook(
         "stored_text_messages": stored,
         "automatic_replies_sent": sent,
         "automatic_replies_skipped": skipped,
+        "automatic_replies_uncertain": uncertain,
     }
