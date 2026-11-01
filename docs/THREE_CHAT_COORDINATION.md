@@ -58,7 +58,7 @@ Tasks:
 - Add regression tests proving direct publish routes cannot call Canva or Meta.
 - Keep all live messaging and publishing disabled during development.
 
-**Current status:** IN PROGRESS — focused hardening PR #130 is open; CI is running. Direct Canva photo/Reel routes and the legacy one-step image publisher have been disabled in the branch.
+**Current status:** CODE AND PR CI VERIFIED — focused hardening PR #130 is open for review. Direct Canva photo/Reel routes and the legacy one-step image publisher are disabled in the branch; do not mark the full three-part cycle complete yet.
 
 **Latest update / handoff — 2026-11-01:**
 - Re-read the coordination hub on current main and audited current main commit `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`. PR #128 has since merged as that commit; the old coordination text elsewhere in this hub still contains stale PR #128 open/conflict statements. Part 1 should reconcile its own section and the earlier log entries.
@@ -68,12 +68,12 @@ Tasks:
 - **Regression coverage:** updated `tests/test_canva_direct_post.py` and `tests/test_canva_direct_publish.py` to assert permanent HTTP 410 even when `INSTAGRAM_AUTOMATION_ENABLED=true`, while keeping admin/master authorization tests. Added `tests/test_live_action_review_gates.py` to prove the generic one-step image route rejects publication and never calls Meta.
 - **Other live-action routes reviewed:** comment replies, DM replies, generic Reel publish, Canva photo publish and Canva Reel draft/publish actions require admin authentication, NOVA API key, DB master switch and global automation flag (where the route sends/publishes). Reel/photo publish routes also check Meta container `FINISHED` before `media_publish`. Webhook auto-replies retain their DM-specific flag + global automation flag + master switch. Scheduler has its independent scheduler flag, global flag, DB master and `direct_publish_enabled` gate.
 - **Review-flow limitation:** publish endpoints in the draft flow are explicit authenticated admin actions after draft/status inspection, but the code does not maintain a separate durable per-item approval ledger. Treat the explicit publish request as the operator's approval; a formal approval record/audit trail is a future hardening item if stronger workflow proof is required.
-- **PR/CI:** PR #130 is open and currently reports mergeable. Latest head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. GitHub Actions run [#41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804) is **IN PROGRESS**; no test outcome is claimed yet. No local test execution was available in this pass.
+- **PR/CI:** PR #130 is open and currently reports mergeable. Latest head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. GitHub Actions run [#41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804) completed successfully: job `test` passed, **505 passed, 6 skipped, 40 warnings, 0 failed**. All workflow steps completed. No local test execution was available in this pass.
 - **Files changed on branch:** `app/canva_direct_post.py`, `app/canva_direct_publish.py`, `app/main.py`, `tests/test_canva_direct_post.py`, `tests/test_canva_direct_publish.py`, `tests/test_live_action_review_gates.py`. Latest branch head above; branch has four changed files per PR metadata? Re-check exact changed-file count after latest commit; expected five files.
 - **Development posture:** do not enable `INSTAGRAM_AUTOMATION_ENABLED`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED`, `NOVA_SCHEDULER_ENABLED`, or any direct-publish setting during development. No real Instagram messages/posts, Canva API calls, OAuth, Render changes or deployment were performed.
 - **Part 1 handoff:** PR #128 is now merged in main at `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; update stale coordination status and inspect open PR [#129](https://github.com/francistheroo/nova-instagram-ai/pull/129), a backup of PR #113 with scheduler code changes, reported open and non-mergeable. Determine whether it is needed or should be closed; do not merge it blindly.
 - **Part 3 handoff:** Part 3's current-cycle timezone startup/readiness validation and Render review are still outstanding in the hub. Please handle those independently; this Part 2 PR does not modify scheduler timezone logic or Render configuration. Canva/Render live connections remain unverified.
-- Overall production-readiness work is **NOT COMPLETE** until Parts 1 and 3 post current-cycle evidence and PR #130 passes CI/review.
+- Overall production-readiness work is **NOT COMPLETE** until Parts 1 and 3 post current-cycle evidence and PR #130 receives Part 1 review/merge decision.
 ### Part 3 — Integrations, scheduling and deployment
 
 **Owner:** Chat / Part 3
@@ -94,6 +94,17 @@ Tasks:
 ## Shared handoff log
 
 Add new entries at the top. Use this format:
+
+### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
+
+- **Status:** VERIFIED — PR-head CI passed; PR remains open for independent review.
+- **Branch / PR:** `security/disable-canva-direct-publish-bypass`, [PR #130](https://github.com/francistheroo/nova-instagram-ai/pull/130), open, GitHub reports mergeable.
+- **Commit SHA:** Base main at branch creation `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; latest branch head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. Compare to current main: 8 ahead / 3 behind; behind commits are documentation updates after branch creation.
+- **Changes made:** Disabled legacy Canva photo/Reel direct-publish routes with HTTP 410; disabled legacy one-step `/instagram/publish-image`; removed external API publishing code from direct Canva modules; added no-call review-bypass regression tests. Auth/API-key/master-switch dependencies remain enforced before returning 410.
+- **Tests run and results:** GitHub Actions [run #41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804), job `test`: **505 passed, 6 skipped, 40 warnings, 0 failed**. All steps succeeded. No local test execution.
+- **CI evidence:** PR-head CI run #41298463804 on `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`; no claim about current-main CI.
+- **Risks or blockers:** Draft-flow publish endpoints treat the explicit authenticated admin publish request as operator approval after Meta reports FINISHED; no separate persisted approval ledger exists. Keep all live action flags OFF.
+- **Next part / requested action:** Part 1: update stale PR #128 coordination status (it is merged as `c18af6a32870ad40ceb6735b5c8a368bd7861c9b6`? verify exact SHA from main) and review open backup PR #129 plus PR #130. Part 3: independently fix timezone readiness and review Render deployment evidence. Overall cycle remains open until all three parts supply current evidence.
 
 ### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
 
