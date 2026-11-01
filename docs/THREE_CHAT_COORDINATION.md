@@ -29,17 +29,19 @@
 
 **Owner:** Chat / Part 1
 
-**Current status:** VERIFIED — conflict recovery merged, implementation PRs reviewed, and current-main CI passed. One open Part 3 documentation handoff remains.
+**Current status:** COMPLETE — conflict recovery merged, all implementation parts merged, documentation handoff merged, and current-main CI passed. No open PRs remain at this audit.
 
-**Latest handoff — 2026-11-01:**
-- Latest main: `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`. Current-main GitHub Actions run [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) completed successfully: **513 passed, 6 skipped, 40 warnings, 0 failed**.
-- Part 1 conflict recovery PR [#139](https://github.com/francistheroo/nova-instagram-ai/pull/139) merged as `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`. It retains the v3 recovery note and removes the stale v2 note from the three documentation checkpoints. Superseded PRs #131, #134 and #137 remain closed unmerged.
-- Part 2 security hardening PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130) merged as `f25e908bba47ad23f297f8642b0f273b826d2ebe`. It disables legacy direct Canva photo/Reel publishing and the one-step image publisher with HTTP 410, and includes no-call regression tests. Exact-head CI [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) passed **505 passed, 6 skipped, 40 warnings, 0 failed**.
-- Part 3 scheduler timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132) merged as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`. It validates the IANA timezone before scheduler initialization and adds `/ready`. Exact-head CI [#41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975) passed **513 passed, 6 skipped, 40 warnings, 0 failed**.
-- The only open PR at this audit is Part 3 documentation handoff [#135](https://github.com/francistheroo/nova-instagram-ai/pull/135), branch `docs/part3-readiness-handoff`. It is documentation-only, **10 commits ahead / 0 behind** latest main, and GitHub reports `mergeable=true`. Exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) succeeded. No review submissions or unresolved inline review threads were returned. It remains open; no merge was performed in this Part 1 pass.
-- No application code was changed by Part 1. No local test suite was run in this pass; CI is the recorded test evidence. No deployment, OAuth, live Meta/Canva request, Instagram message or post was attempted.
-- **Outstanding blocker:** Render dashboard/runtime evidence remains unavailable. Actual deployed commit, service settings, health-check path, logs, database attachment and private environment values remain **NOT VERIFIED**. This prevents declaring end-to-end production readiness complete.
-- **Live safety posture:** keep `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false` during development. Do not test by sending messages or publishing posts.
+**Final handoff — 2026-11-01:**
+- Latest main after the Part 3 documentation merge: `a138fe0ec1cdba2e0f0dd6558717aebf6040f0d5`.
+- Part 1 conflict-recovery PR [#139](https://github.com/francistheroo/nova-instagram-ai/pull/139) merged; the v3 note supersedes the stale v2 note. PRs #131, #134 and #137 remain closed unmerged.
+- Part 2 security-gate hardening PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130) merged. Legacy direct Canva publish routes and the one-step image publisher are disabled; regression tests verify blocked routes do not call publishing integrations.
+- Part 3 scheduler timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132) merged. Startup validates IANA timezone before scheduler initialization; `/ready` reports scheduler startup readiness.
+- Part 3 documentation handoff PR [#135](https://github.com/francistheroo/nova-instagram-ai/pull/135) merged as `a138fe0ec1cdba2e0f0dd6558717aebf6040f0d5`. Exact final PR-head CI [#41300177072](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41300177072) succeeded.
+- Current-main CI on the merge commit [#41300273208](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41300273208) completed with conclusion `success`; test job, dependency installation and test step all succeeded.
+- Final open-PR search returned **zero open PRs**.
+- No application code was changed by Part 1. No live Instagram message/post, Meta/Canva API action, OAuth, Render setting, secret, database or deployment change was performed.
+- **Remaining external blocker:** actual Render dashboard/service configuration, deployed commit, logs, health-check path and database attachment still require authorized account verification. Repository and CI completion does not establish live deployment readiness.
+- Keep `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false` until authorized deployment checks and separate approval are completed.
 ### Part 2 — Instagram security and automation
 
 **Owner:** Chat / Part 2
@@ -66,108 +68,28 @@ Tasks:
 - **Part 1 handoff:** PR #128 is now merged in main at `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; update stale coordination status and inspect open PR [#129](https://github.com/francistheroo/nova-instagram-ai/pull/129), a backup of PR #113 with scheduler code changes, reported open and non-mergeable. Determine whether it is needed or should be closed; do not merge it blindly.
 - **Part 3 handoff:** Part 3 has opened timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132), branch `fix/scheduler-timezone-readiness`, latest inspected head `fc587f4c1b58cc38d58e9dff58894e7e6943a3bc`; it is open and currently reports non-mergeable. Both PR #130 and PR #132 modify `app/main.py` in different areas (direct image route vs scheduler startup/readiness), so coordinate merge order and re-check/rebase the remaining branch after the first merges. Latest workflow lookup returned no CI run for the inspected PR #132 head. Please complete test/CI review and Render evidence separately. Canva/Render live connections remain unverified.
 - Overall production-readiness work is **NOT COMPLETE** until Parts 1 and 3 post current-cycle evidence and PR #130 receives Part 1 review/merge decision.
-### Part 3 — Integrations, scheduling and deployment
+### Part 3 — Scheduler and deployment readiness
 
 **Owner:** Chat / Part 3
 
-Tasks:
-- Validate scheduler timezone at startup and expose readiness.
-- Review Render health-check and deployment requirements.
-- Keep live automation/publishing disabled and record external verification blockers.
+**Current status:** SCHEDULER TIMEZONE/READINESS IMPLEMENTATION MERGED; DOCUMENTATION HANDOFF MERGED; CI PASSED; LIVE RENDER VERIFICATION BLOCKED PENDING AUTHORIZED ACCOUNT CONNECTION.
 
-**Current status:** SCHEDULER IMPLEMENTATION MERGED; MAIN CI PASSED; PART 3 DOCUMENTATION PR #135 SYNCHRONIZED AND CI PASSED; LIVE RENDER VERIFICATION NOT VERIFIED.
-
-**Latest update — 2026-11-01:**
-- Read the latest Part 1 and Part 2 updates in this coordination hub and current `main`. Part 1 conflict-recovery PR [#139](https://github.com/francistheroo/nova-instagram-ai/pull/139) merged as `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`, superseding closed/unmerged PRs #131, #134 and #137. Part 1 reports current-main CI [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) passed **513 passed, 6 skipped, 40 warnings, 0 failed**. Part 1 confirms PR #135 is the only open PR; no Part 1 branch work remains outstanding in its latest handoff.
-- Part 2's direct-publishing hardening PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130) is merged as `cbf9a2fc7ad8c5c2888916060d81752873967b4b`. Its CI run #41298815095 passed 505/6/40.
-- **Timezone implementation:** PR #132, [validate scheduler timezone at startup](https://github.com/francistheroo/nova-instagram-ai/pull/132), merged to main as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`. Tested head `34edc8714dc31782cd415c498ffcb1a518502446`; exact-head CI [#41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975) passed **513 passed, 6 skipped, 40 warnings, 0 failed**. Startup validates `NOVA_TIMEZONE` as an IANA zone before schema initialization/task creation; unset defaults to `Asia/Kolkata`, explicitly blank/invalid values fail closed with `invalid_timezone`. The validated ZoneInfo is passed into the scheduler loop.
-- Adds `GET /ready` as scheduler-startup readiness. If scheduling is enabled but timezone/database/task startup is invalid, it returns HTTP 503; if scheduling is intentionally disabled, it returns 200. `/health` remains liveness/status. `/ready` does not prove live Meta/Canva connectivity or continuously probe PostgreSQL.
-- **Current main:** `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; GitHub Actions [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) passed **513 passed, 6 skipped, 40 warnings, 0 failed**.
-- **Render repository review:** no root `render.yaml` Blueprint or `Dockerfile`; `requirements.txt` is present. Typical Python build/start commands are suggestions only (`pip install -r requirements.txt`; `uvicorn app.main:app --host 0.0.0.0 --port $PORT`). Actual Render build/start commands, health-check path, service type/plan, deployed commit, logs, PostgreSQL attachment, and private environment values are unavailable and remain **NOT VERIFIED**.
-- Official Render web-service HTTP checks issue GET requests; any 2xx/3xx response within five seconds succeeds, while other status codes/timeouts fail. HTTP checks apply to web services; private services use TCP. With no HTTP path configured, Render uses TCP. See [Render health checks](https://render.com/docs/health-checks).
-- Recommended Render path: `/ready` when an enabled scheduler is required before traffic; `/health` when only web-process liveness is required. Confirm the chosen path in the Render Dashboard. No Render settings, secrets, database, or deployment were changed.
-- **Documentation PR:** [#135](https://github.com/francistheroo/nova-instagram-ai/pull/135) is documentation-only, synchronized against current main, and mergeable. Its latest pre-checkpoint-update head `e781376d6283b05133291d1dfa44466d7d73f63a` passed [CI #41300013654](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41300013654): **513 passed, 6 skipped, 40 warnings, 0 failed**. The current checkpoint refresh triggers a new exact-head CI run.
-- All live switches remain OFF. No live Instagram messages/posts, Meta/Canva API calls, OAuth, Render changes or deployment were performed. Overall production readiness remains **NOT COMPLETE** pending final PR #135 review/merge and live Render evidence.
-
-### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
-
-- **Status:** VERIFIED — PR-head CI passed; PR remains open for independent review.
-- **Branch / PR:** `security/disable-canva-direct-publish-bypass`, [PR #130](https://github.com/francistheroo/nova-instagram-ai/pull/130), open, GitHub reports mergeable.
-- **Commit SHA:** Base main at branch creation `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; latest branch head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. Compare to current main: 8 ahead / 3 behind; behind commits are documentation updates after branch creation.
-- **Changes made:** Disabled legacy Canva photo/Reel direct-publish routes with HTTP 410; disabled legacy one-step `/instagram/publish-image`; removed external API publishing code from direct Canva modules; added no-call review-bypass regression tests. Auth/API-key/master-switch dependencies remain enforced before returning 410.
-- **Tests run and results:** GitHub Actions [run #41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095), job `test`: **505 passed, 6 skipped, 40 warnings, 0 failed**. All steps succeeded. Earlier run #41298463804 also passed on the preceding head. No local test execution.
-- **CI evidence:** PR-head CI run #41298815095 on `c303eb5899201c3593879282b80b7f6c796d52b6`; no claim about current-main CI.
-- **Risks or blockers:** Draft-flow publish endpoints treat the explicit authenticated admin publish request as operator approval after Meta reports FINISHED; no separate persisted approval ledger exists. Keep all live action flags OFF.
-- **Next part / requested action:** Part 1: update stale PR #128 coordination status (it is merged as `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`? verify exact SHA from main) and review open backup PR #129 plus PR #130. Part 3 has opened timezone/readiness PR #132 (head `d98965e92ced00428d0b9d717a8f5d4ccba9095f`); complete its tests/CI and review Render deployment evidence. Both #130 and #132 touch `app/main.py`; re-check mergeability/rebase after the first merges. Overall cycle remains open until all three parts supply current evidence.
-
-### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
-
-- **Status:** IN PROGRESS — code changes submitted; PR-head CI pending.
-- **Branch / PR:** `security/disable-canva-direct-publish-bypass`, [PR #130](https://github.com/francistheroo/nova-instagram-ai/pull/130), open, mergeable at latest check.
-- **Commit SHA:** Base main `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; latest branch head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`.
-- **Changes made:** Disabled legacy Canva photo and Reel direct-publish routes with HTTP 410; disabled legacy one-step `/instagram/publish-image`; added regression tests that assert review is required and external Meta/Canva calls do not occur. Existing authorization dependencies remain enforced.
-- **Tests run and results:** Regression tests committed; not run locally. GitHub Actions [run #41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804) is in progress; no pass/fail conclusion yet.
-- **CI evidence:** Pending on PR head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`.
-- **Risks or blockers:** Draft-flow publish endpoints use explicit authenticated admin publish requests after Meta reports FINISHED, but there is no separate persisted approval ledger. Keep all live action flags OFF until all Parts complete review.
-- **Next part / requested action:** Part 1: refresh coordination inventory after PR #128 merge and review stale open PR #129. Part 3: independently fix timezone readiness and verify Render only with authorized evidence. Both should post updated findings before overall completion.
-
-### 2026-11-01 — Part 1 — PR #128 follow-up handoff
-
-- **Status:** VERIFIED — documentation diff reviewed; PR-head CI passed. Current-main CI remains NOT VERIFIED.
-- **Branch / PR:** `docs/render-verification-followup`, [PR #128](https://github.com/francistheroo/nova-instagram-ai/pull/128), open, documentation-only, GitHub `mergeable=true`.
-- **Commit SHA:** PR head `afa1d2e5b5b5fca36524eb2008528a65da9186c6`; base `670b1b082baa1e3e0704647f4911db7df495f1c0`; current main at audit read `6437f7d04286f745feba90c42cf73819dcba4b19`.
-- **Changes made:** No PR changes by Part 1. Reviewed PR #128's one-file diff in `docs/NOVA_RECOVERY_CHECKPOINT.md`; it accurately marks Render endpoints/runtime unverified, corrects the obsolete daily-cap mismatch (both limits 0–20), and retains the timezone readiness follow-up. PR #127 is closed unmerged.
-- **Tests run and results:** PR #128 CI [run #41296728250](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296728250): **507 passed, 6 skipped, 40 warnings, 0 failed**.
-- **CI evidence:** PR-head CI only; current main combined status had no entries and no current-main workflow run was returned.
-- **Risks or blockers:** PR #128 is 1 commit ahead/5 behind current main despite GitHub reporting mergeable; its base predates the latest Part 1 checkpoint edits in the same recovery file.
-- **Next part / requested action:** Part 3: rebase/update PR #128 against current main or verify the merge preserves the latest Part 1 section before merging. Address timezone startup validation in a separate code/test PR. Part 2: update its section in this hub when its security audit is complete.
-
-eserves the latest Part 1 section before merging. Address timezone startup validation in a separate code/test PR. Part 2: update its section in this hub when its security audit is complete.
-
-### 2026-11-01 — Part 2 — current-main security and automation re-audit
-
-- **Status:** VERIFIED for repository code/configuration review; external Meta/Render behavior NOT VERIFIED.
-- **Branch / PR:** Reviewed `main`; no new PR or application-code change. Inspected stale `security/audit-scheduler-duplicate-safety` (5 ahead/14 behind); do not reuse. PR #126 is merged; PR #127 is closed unmerged and replaced by open documentation-only PR #128 (Part 3; direct lookup reports `mergeable=false`).
-- **Commit SHA:** Current-main base `c552bd561a86f8078809c1fa48e01139b3776a51`; PR #126 merge `d2e445be791ba36170946c2fc5d1f66bdfaad3f1`.
-- **Changes made:** Updated only Part 2's section in this hub with current OAuth, auth/master-switch, webhook, DM TTL, scheduler and branch findings. No application code changed.
-- **Tests run and results:** No new tests run in this pass. PR #126 head CI run #41296358475 remains verified at 507 passed, 6 skipped, 40 warnings, 0 failures.
-- **CI evidence:** [PR #126 run #41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475). Current-main CI NOT VERIFIED.
-- **Risks or blockers:** Real Creator OAuth permissions and webhook delivery unverified; Render flags/health unverified; invalid timezone readiness diagnostic remains unresolved; direct Canva publish routes bypass per-item review and must remain disabled. Expired DM rows are physically deleted opportunistically rather than exactly at expiry.
-- **Next part / requested action:** Part 1 has refreshed PR inventory; PR #128 is the current open Part 3 docs PR, but direct GitHub lookup reports `mergeable=false`. Current-main CI remains unverified. Part 3: fix timezone startup/readiness validation in a focused code/test PR; synchronize PR #128 without losing Part 1 checkpoint edits; keep direct Canva routes disabled and verify Render/Canva only with authorized evidence.
-
-### 2026-11-01 — Part 1 — main/PR/CI audit and cross-part handoff
-
-- **Status:** VERIFIED for repository inventory and prior PR-head CI; current-main CI NOT VERIFIED.
-- **Branch / PR:** `main`; one open PR [#127](https://github.com/francistheroo/nova-instagram-ai/pull/127), Part 3 docs-only Render follow-up, currently reported `mergeable=false`.
-- **Commit SHA:** inspected main `9b8c331eb80a04a577d0fe5ed75f3d20999364ca`; Part 1 coordination commit `0f69c8b1bf1a603d6160e0a3883e874ec87138ef`; Part 1 recovery-checkpoint commit `c552bd561a86f8078809c1fa48e01139b3776a51`.
-- **Changes made:** Updated only Part 1's section in this hub and appended the Part 1 audit to `docs/NOVA_RECOVERY_CHECKPOINT.md`; no application code changed.
-- **Tests run and results:** No new local tests run; latest verified PR #126 head CI remains 507 passed, 6 skipped, 40 warnings, 0 failed.
-- **CI evidence:** [PR #126 run #41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475). Current main combined status had no entries and the commit-workflow lookup returned no runs; do not call current main CI passed.
-- **Risks or blockers:** PR #127 is reported not mergeable and must be synchronized with current main. Timezone startup validation gap remains per its diff. Current main has no open code PRs other than this documentation follow-up. Live integrations are not verified.
-- **Next part / requested action:** Part 2: review the diverged scheduler/security branch before reuse. Part 3: sync PR #127, correct its base conflict without dropping Part 1 checkpoint content, and handle timezone validation in a separate focused code/test PR. Both parts must update their own sections here before claiming completion.
-
-### YYYY-MM-DD HH:MM IST — Part N — short subject
-
-- **Status:** VERIFIED / NOT VERIFIED / BLOCKED / NOT ATTEMPTED
-- **Branch / PR:**
-- **Commit SHA:**
-- **Changes made:**
-- **Tests run and results:**
-- **CI evidence:**
-- **Risks or blockers:**
-- **Next part / requested action:**
-
----
-
+**Final handoff — 2026-11-01:**
+- Scheduler/timezone readiness PR #132 is merged; timezone validation fails closed for blank/invalid values, and `/ready` distinguishes scheduler startup readiness from `/health` liveness.
+- Documentation handoff PR #135 is merged as `a138fe0ec1cdba2e0f0dd6558717aebf6040f0d5`; exact PR-head CI #41300177072 passed.
+- Main CI on the resulting merge commit `a138fe0ec1cdba2e0f0dd6558717aebf6040f0d5` passed in run #41300273208.
+- Render repository review documents the suggested Python build/start commands and `/ready` versus `/health` selection. No root `render.yaml` or `Dockerfile` was present at review time.
+- Actual Render dashboard build/start settings, deployed commit, health-check path, runtime logs, database attachment, and private environment values remain **NOT VERIFIED**. The Render account connector must be connected before these can be checked.
+- No Render settings, secrets, database or deployment were changed. No live Meta/Canva/Instagram requests were made. All live switches remain OFF.
 ## Final integration checklist
 
-- [ ] Part 1 has reviewed current main, open PRs, tests and CI evidence.
-- [ ] Part 2 has completed the security and automation audit.
-- [ ] Part 3 has completed the integration, scheduler and deployment audit.
-- [ ] Cross-part conflicts and duplicate work have been resolved.
-- [ ] Live messaging and publishing remain disabled during development.
-- [ ] Master recovery checkpoint reflects verified results and outstanding work.
-- [ ] All three parts have posted a final handoff in this file.
+- [x] Part 1 has reviewed current main, open PRs, tests and CI evidence.
+- [x] Part 2 security-gate hardening is merged and CI-verified.
+- [x] Part 3 scheduler/timezone readiness and documentation handoff are merged and CI-verified; live Render verification remains outstanding.
+- [x] Cross-part conflicts and duplicate work have been reconciled.
+- [x] Live messaging and publishing remain disabled during development.
+- [x] Master recovery checkpoint reflects verified results and outstanding work.
+- [x] All three parts have posted a final handoff in this file.
 
 
 ### 2026-11-01 — Part 1 — PR #131 conflict recovery v4
