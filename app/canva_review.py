@@ -185,3 +185,142 @@ async def create_instagram_reel_draft_from_canva_export(
         "warning": "The Canva export URL expires after 24 hours. Meta must fetch it before expiry. Review the Reel and caption; publish separately only after Meta reports FINISHED.",
         "next_step": f"GET /instagram/reels/drafts/{container_id} to check processing. Publication is a separate explicit action.",
     }
+
+
+class CreateInstagramPhotoDraftRequest(BaseModel):
+    caption: str = Field(default="", max_length=2200)
+
+
+def _require_instagram_actions_enabled() -> None:
+    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
+        raise HTTPException(
+            status_code=403,
+            detail="Instagram actions are disabled. Enable only after testing and authorization.",
+        )
+
+
+@router.post("/instagram-photo-drafts/{job_id}", dependencies=[Depends(require_master_enabled)])
+async def create_instagram_photo_draft_from_canva_export(
+    job_id: str,
+    body: CreateInstagramPhotoDraftRequest,
+    _: bool = Depends(require_nova_key),
+):
+    """Create an Instagram image container from a completed Canva PNG export; never publish."""
+    if not _valid_job_id(job_id):
+        raise HTTPException(status_code=422, detail="Invalid Canva export job ID.")
+    _require_instagram_actions_enabled()
+
+    export_payload = await _canva_request("GET", f"exports/{job_id}")
+    job = export_payload.get("job", {})
+    if job.get("status") != "success":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Canva export is not ready. Wait for a successful PNG export.",
+                "status": job.get("status"),
+                "published": False,
+            },
+        )
+    urls = job.get("urls", [])
+    image_url = next(
+        (url for url in urls if isinstance(url, str) and url.startswith("https://")),
+        None,
+    ) if isinstance(urls, list) else None
+    if not image_url:
+        raise HTTPException(status_code=502, detail="Canva did not return a usable HTTPS export URL.")
+
+    from app.main import instagram_config, meta_request
+
+    _, user_id, _ = instagram_config()
+    container = await meta_request(
+        "POST",
+        f"{user_id}/media",
+        data={"image_url": image_url, "caption": body.caption},
+    )
+    container_id = container.get("id")
+    if not isinstance(container_id, str) or not container_id:
+        raise HTTPException(status_code=502, detail="Meta did not return an image container ID.")
+    return {
+        "canva_export_job_id": job_id,
+        "container_id": container_id,
+        "status": "created",
+        "published": False,
+        "review_required": True,
+        "next_step": f"Check GET /canva/instagram-photo-drafts/{container_id}/status; publish only after Meta reports FINISHED and you approve.",
+        "warning": "The Canva export URL expires after 24 hours. Meta must fetch it before expiry.",
+    }
+
+
+@router.get("/instagram-photo-drafts/{container_id}/status")
+async def get_instagram_photo_draft_status(
+    container_id: str,
+    _: bool = Depends(require_nova_key),
+):
+    """Check Meta image-container readiness without publishing."""
+    if not _valid_job_id(container_id):
+        raise HTTPException(status_code=422, detail="Invalid Instagram container ID.")
+    from app.main import meta_request
+
+    payload = await meta_request(
+        "GET",
+        container_id,
+        params={"fields": "id,status_code,status"},
+    )
+    return {
+        "container_id": payload.get("id", container_id),
+        "status_code": payload.get("status_code"),
+        "status": payload.get("status"),
+        "published": False,
+        "publish_allowed": payload.get("status_code") == "FINISHED",
+    }
+
+
+@router.post(
+    "/instagram-photo-drafts/{container_id}/publish",
+    dependencies=[Depends(require_master_enabled)],
+)
+async def publish_instagram_photo_draft(
+    container_id: str,
+    _: bool = Depends(require_nova_key),
+):
+    """Explicitly publish an approved photo draft only after Meta reports FINISHED."""
+    if not _valid_job_id(container_id):
+        raise HTTPException(status_code=422, detail="Invalid Instagram container ID.")
+    _require_instagram_actions_enabled()
+    from app.main import instagram_config, meta_request
+
+    _, user_id, _ = instagram_config()
+    status_payload = await meta_request(
+        "GET",
+        container_id,
+        params={"fields": "id,status_code,status"},
+    )
+    if status_payload.get("status_code") != "FINISHED":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Photo is not ready to publish. Meta must report FINISHED first.",
+                "status_code": status_payload.get("status_code"),
+                "status": status_payload.get("status"),
+                "published": False,
+            },
+        )
+    result = await meta_request(
+        "POST",
+        f"{user_id}/media_publish",
+        data={"creation_id": container_id},
+    )
+    if not result.get("id"):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "Instagram did not confirm the published media ID.",
+                "container_id": container_id,
+                "published": False,
+            },
+        )
+    return {
+        "container_id": container_id,
+        "published": True,
+        "result": result,
+    }

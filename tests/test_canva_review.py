@@ -222,3 +222,125 @@ def test_canva_reel_draft_requires_master_switch(monkeypatch):
 
     assert response.status_code == 503
     assert "master switch is OFF" in response.json()["detail"]
+
+
+
+def test_canva_png_export_creates_photo_container_without_publishing(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import canva_review, main
+
+    async def fake_canva(method, path, *, params=None, json_body=None):
+        assert (method, path) == ("GET", "exports/png_job")
+        return {"job": {"id": "png_job", "status": "success", "urls": ["https://export-download.canva.com/photo.png"]}}
+
+    calls = []
+
+    async def fake_meta(method, path, *, params=None, data=None):
+        calls.append((method, path, params, data))
+        return {"id": "photo_container_123"}
+
+    monkeypatch.setattr(canva_review, "_canva_request", fake_canva)
+    monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v26.0"))
+    monkeypatch.setattr(main, "meta_request", fake_meta)
+
+    response = client.post(
+        "/canva/instagram-photo-drafts/png_job",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "A reviewed photo"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["container_id"] == "photo_container_123"
+    assert payload["published"] is False
+    assert payload["review_required"] is True
+    assert calls == [(
+        "POST", "user_123/media", None,
+        {"image_url": "https://export-download.canva.com/photo.png", "caption": "A reviewed photo"},
+    )]
+
+
+def test_canva_photo_draft_rejects_unfinished_export(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import canva_review
+
+    async def fake_canva(method, path, *, params=None, json_body=None):
+        return {"job": {"id": "png_job", "status": "in_progress"}}
+
+    monkeypatch.setattr(canva_review, "_canva_request", fake_canva)
+    response = client.post(
+        "/canva/instagram-photo-drafts/png_job",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "Wait"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["published"] is False
+
+
+def test_canva_photo_status_reports_publish_readiness_without_publishing(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    from app import main
+
+    calls = []
+
+    async def fake_meta(method, path, *, params=None, data=None):
+        calls.append((method, path, params, data))
+        return {"id": "photo_container_123", "status_code": "FINISHED", "status": "Finished"}
+
+    monkeypatch.setattr(main, "meta_request", fake_meta)
+    response = client.get(
+        "/canva/instagram-photo-drafts/photo_container_123/status",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json()["publish_allowed"] is True
+    assert response.json()["published"] is False
+    assert calls == [("GET", "photo_container_123", {"fields": "id,status_code,status"}, None)]
+
+
+def test_canva_photo_publish_requires_finished_container(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import canva_review, main
+
+    calls = []
+
+    async def fake_meta(method, path, *, params=None, data=None):
+        calls.append((method, path, params, data))
+        return {"id": "photo_container_123", "status_code": "IN_PROGRESS", "status": "Processing"}
+
+    monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v26.0"))
+    monkeypatch.setattr(main, "meta_request", fake_meta)
+    response = client.post(
+        "/canva/instagram-photo-drafts/photo_container_123/publish",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["published"] is False
+    assert [call[1] for call in calls] == ["photo_container_123"]
+
+
+def test_canva_photo_publish_is_explicit_after_finished_status(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import main
+
+    calls = []
+
+    async def fake_meta(method, path, *, params=None, data=None):
+        calls.append((method, path, params, data))
+        if method == "GET":
+            return {"id": "photo_container_123", "status_code": "FINISHED"}
+        return {"id": "published_photo_123"}
+
+    monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v26.0"))
+    monkeypatch.setattr(main, "meta_request", fake_meta)
+    response = client.post(
+        "/canva/instagram-photo-drafts/photo_container_123/publish",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json()["published"] is True
+    assert [call[1] for call in calls] == ["photo_container_123", "user_123/media_publish"]
+    assert calls[-1][3] == {"creation_id": "photo_container_123"}
