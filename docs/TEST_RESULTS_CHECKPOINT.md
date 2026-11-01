@@ -134,3 +134,13 @@ No failing tests were found in the verified main-descendant, PR #125, or latest 
 | Part 3 documentation handoff before latest-main sync | PASS, prior head | [PR #135](https://github.com/francistheroo/nova-instagram-ai/pull/135), prior head `ee29644146c489e2684767e5aa07fa412257ce5b`; [CI #41299478560](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299478560): **505 passed, 6 skipped, 40 warnings, 0 failed**. This does not validate the synchronized head; new exact-head CI is required. |
 
 Part 3 documentation PR #135 synchronized head `47de3ffa814239468f38c101840280c547adf2d9`; [CI #41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) passed **513 passed, 6 skipped, 40 warnings, 0 failed**. PR is mergeable and open. Part 1 replacement branch v4 run [#41299562250](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299562250) passed **505 passed, 6 skipped, 40 warnings, 0 failed**, but it is 19 commits behind main with no unique files; PR #137 is closed unmerged and no Part 1 PR is open. Render dashboard/runtime configuration remains NOT VERIFIED. No Render deployment/configuration change, live Instagram action, or live Meta/Canva request was performed.
+
+
+## Part 1 final conflict recovery and current-main CI — 2026-11-01
+
+| Check | Status | Evidence |
+|---|---|---|
+| Part 1 documentation conflict recovery | PASS + MERGED | [PR #139](https://github.com/francistheroo/nova-instagram-ai/pull/139), merge commit `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; stale v2 note replaced by v3 in the three checkpoint docs. |
+| Current main CI | PASS | [Run #41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) on `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`: **513 passed, 6 skipped, 40 warnings, 0 failed**. |
+| Part 3 docs handoff PR #135 | PASS, OPEN | Exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) succeeded. PR is documentation-only, 10 ahead/0 behind, mergeable; not merged in this pass. |
+| Live Render verification | NOT VERIFIED | Dashboard settings, deployed commit, logs, health-check path, database attachment and runtime remain inaccessible/unverified. |
