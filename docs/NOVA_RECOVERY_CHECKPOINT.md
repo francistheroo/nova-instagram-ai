@@ -336,3 +336,40 @@ The user supplied this status response from the NOVA service:
 - Therefore the current Render deployment, deploy commit, service health, runtime logs, health-check configuration, attached database, and private environment settings remain **UNVERIFIED**. Endpoint retrieval failure is not proof that the service is down.
 - No Render settings, secrets, database schema, or deployment were changed. No Instagram messaging or publishing was performed. Keep live actions disabled during development.
 - To complete live verification, the owner must provide non-sensitive screenshots or copied text from the Render service's latest deploy event and logs, service settings (build/start/health-check configuration), and database attachment overview. Redact all environment values, connection strings, tokens, and credentials. Once those details are available, compare the deployed commit/configuration with the repository and retry the public endpoints.
+
+## Production-readiness hardening — Part 1 audit — 2026-11-01
+
+- Latest main SHA inspected: c18af6a32870ad40ceb6735b5c8a368bd7861c9f (merge of PR #128).
+- PR #128 is closed/merged; merge commit c18af6a32870ad40ceb6735b5c8a368bd7861c9f. Its rebased PR head was 7ac3aee40ba4de7f852ae2643a7d38db4a9a49b6, based on 945e221a57e2e36e29d6aa1ca23208082686f856.
+- Final main CI PASS: [run #41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819), exact main SHA c18af6a32870ad40ceb6735b5c8a368bd7861c9f; **507 passed, 6 skipped, 40 warnings, 0 failed**.
+- Only open PR is #129, a backup of PR #113 work. Head d551cf6c11f733f954cebbbd7c3ee38374328e14, 4 ahead / 66 behind main, diverged; no CI run on this head. Its scheduler validation and stale-run recovery implementation are already present on main; the stale branch differs and should not be merged. Recommend owner-confirmed closure while retaining the branch if desired as backup.
+- No application code or live integrations changed by Part 1. Production-readiness work remains open pending Parts 2 and 3. Live Render/Meta/Canva behavior remains unverified; all live automation/publishing gates must stay OFF.
+
+
+---
+
+## Part 2 production-readiness security hardening — 2026-11-01
+
+- Current main base reviewed: `c18af6a32870ad40ceb6735b5c8a368bd7861c9f` (includes merged PR #128 Render documentation follow-up).
+- Security finding: the legacy direct Canva photo and Reel endpoints (`app/canva_direct_post.py`, `app/canva_direct_publish.py`) could export from Canva and publish directly after general auth/automation gates, without the separate review/draft path. The one-step `/instagram/publish-image` endpoint also created and published in a single request without a review step.
+- PR #130 branch `security/disable-canva-direct-publish-bypass` disables all three legacy one-step endpoints with HTTP 410, `published=false`, and `review_required=true`. API-key, admin and master-switch dependencies remain in place before the rejection response. Canva/Meta publishing code was removed from the direct Canva modules.
+- Regression tests replace former success-path tests with assertions that direct Canva photo/Reel endpoints remain disabled even when `INSTAGRAM_AUTOMATION_ENABLED=true`, and add `tests/test_live_action_review_gates.py` to ensure the generic image publisher cannot call Meta.
+- Latest PR #130 head at checkpoint update: `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. PR is open and mergeable. CI run [#41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804) completed successfully on PR head `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`: **505 passed, 6 skipped, 40 warnings, 0 failed**; job `test` and all steps succeeded.
+- Other live-action route review: comment and DM replies require admin/API key/master/global automation flag; Reel and Canva draft publishing endpoints require explicit authenticated publish request, global automation/master gates and Meta `FINISHED` status; webhook auto replies require the DM-specific flag, global automation flag and DB master switch; scheduler has its independent gates. The draft publish flow does not persist a separate approval ledger; explicit authenticated publish request is the operator approval action for now.
+- No live messages/posts, Canva/Meta API calls, OAuth, Render changes or deployment were attempted. Keep all live action flags OFF.
+- Outstanding: PR #130 CI passed, but it remains open pending independent review/merge decision. Part 1 has opened documentation audit PR #131 (currently open/non-mergeable at latest lookup) and should inspect stale open backup PR #129. Part 3 has opened timezone/readiness PR #132 (head `90b3e289835c323bdabef66beb228c28e17081a8`); its test/CI and Render review remain to be verified. Overall production readiness is not complete until all three parts report evidence.
+
+
+---
+
+## Part 3 production-readiness scheduler timezone and Render review — 2026-11-01
+
+- Current application baseline reviewed: `main` at `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; Part 2's checkpoint-only follow-up advanced main to `d68c82f4e44cb30c89fa21bd3afc2b92fdbf5333`.
+- PR #132 `fix/scheduler-timezone-readiness` adds `scheduler_timezone()`, validating `NOVA_TIMEZONE` during startup before database schema initialization and task creation. An unset variable uses `Asia/Kolkata`; explicitly blank/invalid names yield safe `invalid_timezone` and do not start the scheduler. The validated zone is passed into `scheduler_loop` and is no longer constructed inside its recurring exception handler.
+- Adds `GET /ready`: when scheduler is enabled it requires successful startup and a running task, otherwise returns HTTP 503 with a safe error code; when intentionally disabled it returns 200. `/health` remains a liveness/status endpoint. `/ready` is a scheduler-startup signal, not live Meta/Canva verification or a continuous PostgreSQL probe.
+- Regression tests cover valid/default/invalid IANA zones, blank and malformed values, startup fail-closed behavior, no schema initialization on invalid timezone, scheduler loop validation, and readiness behavior.
+- PR #132 CI rerun [#41298559107](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298559107), head `c6d4a4aca0fd4650d59d622d921731b15a69544b`: **515 passed, 6 skipped, 40 warnings, 0 failed**. Initial run #41298457328 had one test-fixture failure; the schema initializer import was restored locally and the rerun passed. The later documentation-inclusive head `90b3e289835c323bdabef66beb228c28e17081a8` triggered run #41298730013; check its final result before merging.
+- Render source review: root repository has no `render.yaml` or `Dockerfile`; `requirements.txt` is present. Suggested Python build/start commands are `pip install -r requirements.txt` and `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, but actual Render Dashboard settings are not available and are **NOT VERIFIED**.
+- Render's official HTTP health checks use GET and accept any 2xx/3xx response within five seconds; other status codes/timeouts fail. HTTP health checks apply to web services; private services use TCP, and TCP is the default if no HTTP path is configured. See [Render health checks](https://render.com/docs/health-checks). Use `/ready` when an enabled scheduler must be ready before traffic; use `/health` for web-process liveness only.
+- No Render dashboard access, deploy event/logs, deployed commit, health-check path, database attachment, or private env values were available. Public `/health` and `/integrations/status` remain inaccessible from the audit environment. This is not evidence that Render is down. No Render settings, secrets, database schema, or deployment were changed.
+- Development switches remain OFF; no live Instagram, Meta, or Canva requests were made. Live external readiness remains **NOT VERIFIED**.
