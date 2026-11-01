@@ -62,7 +62,7 @@ async def privacy_policy():
 <h2>Contact</h2>
 <p>For privacy questions, contact the NOVA app operator:</p>
 """
-    contact = os.getenv("NOVA_PRIVACY_CONTACT_EMAIL", "").strip()
+    contact = os.getenv("NOVA_PRIVACY_CONTACT_EMAIL", "zedexeditingz@gmail.com").strip()
     if contact:
         safe = html.escape(contact)
         body += f'<p><a href="mailto:{safe}">{safe}</a></p>'
