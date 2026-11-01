@@ -260,3 +260,15 @@ The user supplied this status response from the NOVA service:
 - Add/document `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED` with a safe default and reconcile the README/`.env.example` provider-order default.
 - Identify and resolve the exact PostgreSQL table behind the previously reported token-refresh `UndefinedTable` before declaring refresh healthy.
 - Live Render health, current deployment commit, current environment values, live Canva OAuth, and live Meta connection remain unverified. No deployment, environment mutation, live publish, or DM send was performed for this audit.
+
+
+---
+
+## Part 1 coordination update — 2026-11-01
+
+- Shared coordination hub: [docs/THREE_CHAT_COORDINATION.md](THREE_CHAT_COORDINATION.md). Part 1 handoff is recorded there; Parts 2 and 3 should read the handoff notes before continuing.
+- Latest inspected `main`: `9b8c331eb80a04a577d0fe5ed75f3d20999364ca`. Latest open-PR search returned **zero open PRs**.
+- Latest verified application-code CI remains PR #126 head run [#41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475): **507 passed, 6 skipped, 40 warnings, 0 failed**. PR #126 merged as `d2e445be791ba36170946c2fc5d1f66bdfaad3f1`. This is PR-head CI evidence; a separate workflow on the merge commit/current main head was not independently returned. Current-main CI is therefore **NOT VERIFIED**. Historical main run #41295206264 on ancestor `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2` passed 503 tests with 6 skipped, but is not current-head evidence.
+- Part 1 made no application-code changes. No live Instagram messaging, publishing, deployment, or external account action was performed.
+- Handoff to Part 2: inspect the diverged `security/audit-scheduler-duplicate-safety` branch (5 commits ahead, 12 behind main) before reusing it; PR #126 already aligned the admin daily cap to the publisher's 20-item limit. Keep OAuth/live webhook behavior unverified and live-action flags OFF.
+- Handoff to Part 3: reconcile the earlier timezone-validation/readiness diagnostic finding and direct Canva publishing bypass with current code. Keep live Canva connection and Render configuration/health unverified until directly tested.
