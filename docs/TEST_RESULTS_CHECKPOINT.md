@@ -1,6 +1,12 @@
 # NOVA Test Results Checkpoint
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
+
+## Latest task — PR #122 CI and review
+
+| Canva photo review-gate edge-case tests | PASS + MERGED | [PR #122](https://github.com/francistheroo/nova-instagram-ai/pull/122) · [PR CI run #41293583471](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41293583471) | PR head `95993ec97c41f869e429991e7aeaab8392bfd6f9`; merged to `main` as `6edf84e96b58e70a8523359fa5972363018a8cfd`. GitHub Actions job `test` completed successfully: **502 passed, 6 skipped, 40 warnings, 0 failed**. All workflow steps, including dependency installation and test execution, succeeded. Reviewed the sole changed file `tests/test_canva_review.py`: the three added tests verify disabled Instagram actions do not call Canva, insecure HTTP export URLs are rejected, and Meta states other than `FINISHED` do not reach `media_publish`. Canva/Meta calls are mocked; no live Instagram action was performed. No test failure required a code fix. The CI run is attached to the PR head commit; a separate post-merge `main` run for the merge commit was not returned by the commit-workflow lookup, so post-merge main CI is **NOT VERIFIED**. |
+
+
 
 This file tracks verified repository/CI checks separately from live Instagram integration checks. A green CI run does **not** prove that a real Instagram account is connected or that Meta permissions are approved.
 
