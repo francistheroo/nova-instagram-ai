@@ -350,3 +350,11 @@ The user supplied this status response from the NOVA service:
 - Other live-action route review: comment and DM replies require admin/API key/master/global automation flag; Reel and Canva draft publishing endpoints require explicit authenticated publish request, global automation/master gates and Meta `FINISHED` status; webhook auto replies require the DM-specific flag, global automation flag and DB master switch; scheduler has its independent gates. The draft publish flow does not persist a separate approval ledger; explicit authenticated publish request is the operator approval action for now.
 - No live messages/posts, Canva/Meta API calls, OAuth, Render changes or deployment were attempted. Keep all live action flags OFF.
 - Outstanding: PR #130 CI passed, but it remains open pending independent review/merge decision. Part 1 has opened documentation audit PR #131 (currently open/non-mergeable at latest lookup) and should inspect stale open backup PR #129. Part 3 has opened timezone/readiness PR #132 (head `90b3e289835c323bdabef66beb228c28e17081a8`); its test/CI and Render review remain to be verified. Overall production readiness is not complete until all three parts report evidence.
+
+
+## Part 1 — PR #131 conflict recovery — 2026-11-01
+
+- PR #131 (`part1/production-readiness-audit`, head `7954b4705334b9dddbba3a0625657e947722f04a`) conflicted after main advanced; compare showed 4 commits ahead / 4 behind, merge base `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`.
+- Reapplying Part 1's documentation-only audit onto current main in a fresh branch. No application code, live settings, deployment, or external integration changed.
+- Prior CI evidence remains limited to [run #41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819) on ancestor `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`: 507 passed, 6 skipped, 40 warnings, 0 failed. It does not certify later main commits.
+- Overall production readiness remains incomplete pending Parts 2 and 3.
