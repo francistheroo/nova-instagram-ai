@@ -10,10 +10,13 @@ import app.security as security
 client = TestClient(app)
 
 
-def test_root_is_online():
+def test_root_serves_public_nova_homepage():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["service"] == "NOVA Instagram AI"
+    assert "text/html" in response.headers["content-type"]
+    assert "Your ideas." in response.text
+    assert "NOVA Studio" in response.text
+    assert 'href="/app"' in response.text
 
 
 def test_health_does_not_claim_instagram_is_connected(monkeypatch):

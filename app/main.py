@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Depends
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.personality import NOVA_SYSTEM_PROMPT
@@ -27,6 +28,7 @@ from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import initialize_schema as initialize_oauth_schema, load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
 from app.legal_pages import router as legal_pages_router
+from app.home_page import HOME_PAGE_HTML
 from app.auto_publisher import scheduler_loop, initialize_scheduler_schema, scheduler_timezone
 from app.security import require_user, require_master_enabled, master_enabled
 
@@ -232,14 +234,10 @@ async def meta_request(method: str, path: str, *, params: Optional[dict] = None,
     return payload
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    return {
-        "service": "NOVA Instagram AI",
-        "status": "online",
-        "docs": "/docs",
-        "note": "AI preview works separately. Instagram actions require official Meta authorization and environment configuration.",
-    }
+    """Serve the public NOVA landing page."""
+    return HTMLResponse(HOME_PAGE_HTML)
 
 
 @app.get("/ready")
