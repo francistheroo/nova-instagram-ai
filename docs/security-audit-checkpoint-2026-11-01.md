@@ -34,6 +34,17 @@ Base: `main`
 - Added a regression test proving the global automation OFF state prevents claiming an event or generating/sending a reply even when the DM-specific flag and master switch are ON.
 - README guidance now says to keep both live-action environment flags false throughout development.
 
+## Scheduler safety and duplicate-publishing audit
+
+- Scheduler startup is opt-in: `NOVA_SCHEDULER_ENABLED=true` and a configured PostgreSQL database are required before the background task is created.
+- Each scheduler poll re-checks `NOVA_SCHEDULER_ENABLED` and `INSTAGRAM_AUTOMATION_ENABLED`; actual publishing additionally requires the PostgreSQL-backed NOVA master switch and admin setting `direct_publish_enabled=true`.
+- Schedule slots use the configured `NOVA_TIMEZONE` (default `Asia/Kolkata`). The current and previous minute are checked, and the previous-minute catch-up is assigned to its correct local date across midnight.
+- PostgreSQL enforces `UNIQUE (local_date, content_type, slot)`. Slot claims use `INSERT ... ON CONFLICT DO NOTHING`; a duplicate claim returns no run ID. A transaction-scoped advisory lock serializes per-day/per-content-type cap checks across workers.
+- `processing`, `published`, and `uncertain` rows reserve daily capacity. The publisher caps are 20 posts and 20 Stories per day; invalid caps fail closed to zero. Admin UI/API limits were aligned from 50 to 20 in PR [#126](https://github.com/francistheroo/nova-instagram-ai/pull/126), fixing a configuration mismatch that silently disabled schedules configured above 20.
+- If a worker leaves a `processing` row older than 120 minutes, reconciliation changes it to `uncertain`. A timeout/error after the Meta `media_publish` request, or a missing confirmation ID, is also treated as uncertain. These outcomes are never automatically retried because Meta may already have accepted the publish.
+- Regression coverage verifies duplicate slot conflicts, daily-cap reservation, malformed schedule/cap rejection, midnight date handling, stale-run reconciliation, and ambiguous Meta publish outcomes. PR #126 adds admin-cap validation tests.
+- The scheduler still depends on a persistent PostgreSQL database and an always-awake service for dependable timing. Repository tests use mocks; no live publish was performed. Production Render environment values and real Meta account permissions remain external verification items.
+
 ## Required development settings
 
 ```dotenv
