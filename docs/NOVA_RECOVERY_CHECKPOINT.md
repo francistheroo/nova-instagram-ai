@@ -405,3 +405,15 @@ The user supplied this status response from the NOVA service:
 - Latest open-PR search returned zero open PRs.
 - Render account/service verification remains NOT VERIFIED pending authorized Render connector access. Do not claim production deployment is healthy until the actual deployed commit, settings, logs, health-check path and database attachment are checked.
 - No live Instagram messages/posts, Meta/Canva calls, OAuth, Render changes, secrets or database changes were made. Keep all live automation/publishing switches OFF.
+
+
+---
+
+## Latest runtime token-refresh database diagnosis — 2026-11-01
+
+- The user supplied Render status reporting `instagram_automatic_token_refresh_error="UndefinedTable"`, with Instagram not configured and no live connection verified.
+- Code inspection traced the worker's initial database read to `load_latest_instagram_token()` in `app/oauth_store.py`, which queries `nova_instagram_tokens`. The existing `initialize_schema()` creates this table, but the automatic refresh startup path did not invoke it before launching the worker. The documented full database initialization command is `python -m app.init_oauth_db`.
+- Fix PR [#141](https://github.com/francistheroo/nova-instagram-ai/pull/141) merged as `5d5435bcad27f5118d74a95ff2582df06b9c9f92`. Startup now calls the existing idempotent OAuth schema initializer before starting automatic refresh. If schema initialization fails, the worker does not start and reports the stable error `schema_initialization_failed`.
+- Exact PR-head CI [#41302005766](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41302005766): **515 passed, 6 skipped, 40 warnings, 0 failed**.
+- **Not yet verified:** post-merge main CI, Render deployment of the fix, successful schema initialization against the actual Render PostgreSQL database, absence of the runtime error after redeploy, and live Instagram OAuth/account connection.
+- No database migration was manually executed, no Render settings/secrets were changed, and no live Meta/Instagram action was performed. Never paste database URLs or credentials into chat.
