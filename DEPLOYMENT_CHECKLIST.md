@@ -2,7 +2,8 @@
 
 - [ ] Deploy the FastAPI app to a Python host and keep the Git repository private.
 - [ ] Add AI provider credentials through the host's environment settings; never commit `.env`.
-- [ ] Verify `/health` and test `/preview-reply` with Manglish, Malayalam, and English.
+- [ ] Verify `/health` and `/ready`; use `/ready` as Render's health-check path when an enabled scheduler must be ready before deployment is healthy. `/health` is a liveness/status endpoint and does not prove external integrations are connected.
+- [ ] Confirm `NOVA_TIMEZONE` is a valid IANA timezone (default `Asia/Kolkata`); invalid or blank values prevent an enabled scheduler from starting and make `/ready` return HTTP 503.
 
 ## Connect a real Instagram account
 
