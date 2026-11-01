@@ -109,3 +109,10 @@ No live Canva/Meta publishing was performed; external calls in the regression te
 | Scheduler validation branch hygiene | REVIEW NOTE | The unassociated branch `fix/validate-scheduler-settings-rebased` is 2 commits ahead of main and its `tests/test_auto_publisher.py` contains duplicate definitions of the same three test functions. No workflow run was returned for its head and no matching open PR was found. The duplicate definitions are not present on main; main already contains the scheduler validation implementation/tests from merged PR #113. This stale branch was not merged or modified. The older `fix/validate-scheduler-settings` branch is diverged (3 ahead, 40 behind) and is not suitable for merging as-is. |
 
 No failing tests were found in the verified main-descendant, PR #125, or latest PR #126 CI runs. The 40 warnings are non-fatal deprecation warnings. Both PRs encountered during the audit are now merged; the final open-PR search returned none. No deployment, live Instagram message, or publishing action was performed. Live Render configuration, live Canva/Meta authorization, and production behavior remain unverified.
+
+
+## Part 2 security-hardening tests — 2026-11-01
+
+- PR #130 branch `security/disable-canva-direct-publish-bypass` adds regressions for `/canva/instagram-posts/publish`, `/canva/instagram-reels/publish`, and `/instagram/publish-image` to ensure legacy one-step routes cannot publish or call external APIs.
+- Latest head at time of writing: `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. Workflow [#41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804) was **IN PROGRESS**; result pending. No local tests run.
+- Earlier CI rows in this file are historical PR-head/ancestor evidence only and do not prove PR #130 or current main status.
