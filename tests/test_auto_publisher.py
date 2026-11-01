@@ -179,3 +179,25 @@ def test_stale_processing_runs_become_uncertain_and_are_not_retried(monkeypatch)
 def test_stale_processing_reconciliation_rejects_invalid_threshold(minutes):
     with pytest.raises(ValueError):
         publisher._mark_stale_processing_uncertain(minutes)
+
+
+def test_schedule_times_accept_only_unique_valid_local_time_slots():
+    assert publisher._schedule_times(
+        ["09:00", "9:00", "24:00", "12:60", "13:15", "09:00", None],
+        ["08:00"],
+    ) == ["09:00", "13:15"]
+
+
+def test_malformed_schedule_times_disable_schedule_instead_of_iterating_characters():
+    assert publisher._schedule_times("09:00", ["09:00"]) == []
+    assert publisher._schedule_times({"time": "09:00"}, ["09:00"]) == []
+
+
+def test_daily_limit_rejects_booleans_negative_values_and_unbounded_caps():
+    assert publisher._daily_limit(3, 3) == 3
+    assert publisher._daily_limit(None, 4) == 4
+    assert publisher._daily_limit(True, 3) == 0
+    assert publisher._daily_limit(-1, 3) == 0
+    assert publisher._daily_limit(21, 3) == 0
+    assert publisher._daily_limit("3", 3) == 0
+
