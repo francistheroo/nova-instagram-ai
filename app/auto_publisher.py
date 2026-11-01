@@ -17,6 +17,26 @@ from app.ai_router import AIProviderUnavailable, chat_completion
 from app.security import master_enabled
 
 
+def scheduler_timezone(timezone_name=None):
+    """Return a validated IANA timezone for scheduler startup.
+
+    An unset variable uses the documented Asia/Kolkata default. An explicitly
+    empty or malformed value is a configuration error, not a silent fallback.
+    """
+    if timezone_name is None:
+        timezone_name = os.getenv("NOVA_TIMEZONE", "Asia/Kolkata")
+    if (
+        not isinstance(timezone_name, str)
+        or not timezone_name
+        or timezone_name.strip() != timezone_name
+    ):
+        raise ValueError("invalid_timezone")
+    try:
+        return ZoneInfo(timezone_name)
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("invalid_timezone") from None
+
+
 def _db_url():
     value = os.getenv("DATABASE_URL", "").strip()
     if value.startswith("postgres://"):
@@ -230,8 +250,9 @@ async def _generate_and_publish(kind, meta_request, instagram_config):
     return str(media_id)
 
 
-async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Event):
+async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Event, timezone=None):
     """Poll configured local-time slots; DB uniqueness prevents duplicate runs."""
+    zone = timezone if timezone is not None else scheduler_timezone()
     while not stop_event.is_set():
         try:
             enabled = (
@@ -243,7 +264,6 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                 await asyncio.to_thread(_mark_stale_processing_uncertain)
                 settings = await asyncio.to_thread(_settings)
                 if master_enabled() and settings.get("direct_publish_enabled") is True:
-                    zone = ZoneInfo(os.getenv("NOVA_TIMEZONE", "Asia/Kolkata"))
                     now = datetime.now(zone)
                     due_slots = _due_local_slots(now)
                     schedules = (
