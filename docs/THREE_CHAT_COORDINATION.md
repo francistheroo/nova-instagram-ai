@@ -79,16 +79,36 @@ Tasks:
 **Owner:** Chat / Part 3
 
 Tasks:
-- Audit Canva integration and review-before-publish flow.
-- Verify scheduler configuration and `Asia/Kolkata` timezone behavior.
-- Review Render deployment and health-check readiness.
-- Identify missing configuration without copying secret values.
-- Update the master recovery checkpoint with evidence and outstanding deployment requirements.
+- Validate scheduler timezone at startup and expose readiness.
+- Review Render health-check and deployment requirements.
+- Keep live automation/publishing disabled and record external verification blockers.
 
-**Current status:** NOT STARTED for this coordination cycle.
+**Current status:** IMPLEMENTATION AND REPOSITORY REVIEW COMPLETE; PR #132 OPEN; LIVE RENDER VERIFICATION NOT VERIFIED.
 
-**Latest update / handoff:**
-- Previous known result: PR #124 updated the master recovery checkpoint for Canva, scheduler and Render audit. Re-read the current checkpoint and ve### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
+**Latest update — 2026-11-01:**
+- Reviewed current `main` and the latest Part 1 and Part 2 handoffs. Part 1 conflict-recovery documentation is in PR #134; Part 2 direct-publishing hardening is in PR #130. No duplicate Part 1/Part 2 application work was a## Shared handoff log
+
+### 2026-11-01 — Part 3 — scheduler timezone and Render readiness
+
+- **Status:** IMPLEMENTATION + REPOSITORY REVIEW VERIFIED; live Render settings/runtime NOT VERIFIED.
+- **Branch / PR:** `fix/scheduler-timezone-readiness`, [PR #132](https://github.com/francistheroo/nova-instagram-ai/pull/132), open; synchronized against current main and mergeable at last check.
+- **Tests / CI:** [PR #132 run #41298730013](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298730013): **515 passed, 6 skipped, 40 warnings, 0 failed**. Initial run #41298457328 had one failing fixture; restoring the local schema-initializer import fixed it. Rerun #41298559107 also passed.
+- **Changes:** IANA timezone validation at startup; validated ZoneInfo passed into scheduler; `/ready` returns 503 for enabled scheduler startup failures; `/health` remains liveness. README and deployment checklist document Render health-check requirements.
+- **Render review:** no root `render.yaml` or `Dockerfile`; dashboard commands, health-check path, deployed SHA, logs, database attachment and environment values unavailable. No deployment or configuration changes.
+- **Cross-part evidence:** Part 1 PR #134 CI run #41298840206 passed (507/6/40); Part 2 PR #130 CI run #41298815095 passed (505/6/40). PR #129 is closed as stale backup. Keep all live flags OFF; overall readiness remains open pending PR review and live Render evidence.
+
+dded.
+- **Timezone fix:** PR #132, [fix: validate scheduler timezone at startup](https://github.com/francistheroo/nova-instagram-ai/pull/132), branch `fix/scheduler-timezone-readiness`. The scheduler validates `NOVA_TIMEZONE` as an IANA zone before schema initialization/task creation; unset defaults to `Asia/Kolkata`, explicitly blank/invalid values fail closed with `invalid_timezone`. The validated ZoneInfo is passed into the scheduler loop instead of being constructed inside the recurring exception handler.
+- Added `GET /ready` as scheduler-startup readiness. If scheduling is enabled but timezone/database/task startup is invalid, it returns HTTP 503; if scheduling is intentionally disabled, it returns 200. `/health` remains a liveness/status endpoint. `/ready` does not prove live Meta/Canva connectivity or continuously probe PostgreSQL.
+- **Tests:** PR #132 documentation-inclusive CI [#41298730013](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298730013) passed **515 passed, 6 skipped, 40 warnings, 0 failed** on head `90b3e289835c323bdabef66beb228c28e17081a8`. Initial run #41298457328 had one fixture failure; restoring the schema initializer as a local import fixed it, and rerun #41298559107 passed.
+- **Render repository review:** no root `render.yaml` Blueprint or `Dockerfile`; `requirements.txt` is present. Typical Python build/start commands are suggestions only (`pip install -r requirements.txt`; `uvicorn app.main:app --host 0.0.0.0 --port $PORT`). Actual Render build/start commands, health-check path, service type/plan, deployed commit, logs, PostgreSQL attachment, and private environment values are unavailable and remain **NOT VERIFIED**.
+- Official Render web-service HTTP checks issue GET requests; any 2xx/3xx response within five seconds succeeds, while other status codes/timeouts fail. HTTP checks apply to web services; private services use TCP. With no HTTP path configured, Render uses TCP. See [Render health checks](https://render.com/docs/health-checks).
+- Recommended Render path: `/ready` when an enabled scheduler is required before traffic; `/health` when only web-process liveness is required. Confirm the chosen path in the Render Dashboard. No Render settings, secrets, database, or deployment were changed.
+- **Cross-part evidence:** Part 1 PR #134 CI [#41298840206](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298840206) passed **507 passed, 6 skipped, 40 warnings, 0 failed**. Part 2 PR #130 latest CI [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) passed **505 passed, 6 skipped, 40 warnings, 0 failed**. Latest verified main CI run #41298788305 on `ffae679576245b15eb273053abe9632bc673217d` passed **507/6/40**; verify CI for later main commits separately.
+- **PR #129:** closed as a stale backup by the latest Part 2 handoff; do not reuse or merge its branch.
+- All live switches remain OFF. No live Instagram messages/posts, Meta/Canva calls, OAuth, Render dashboard changes, or deployment were performed. Overall production readiness remains **NOT COMPLETE** pending PR review/merge decisions and live Render evidence.
+
+### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
 
 - **Status:** VERIFIED — PR-head CI passed; PR remains open for independent review.
 - **Branch / PR:** `security/disable-canva-direct-publish-bypass`, [PR #130](https://github.com/francistheroo/nova-instagram-ai/pull/130), open, GitHub reports mergeable.
