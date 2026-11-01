@@ -350,3 +350,12 @@ The user supplied this status response from the NOVA service:
 - Other live-action route review: comment and DM replies require admin/API key/master/global automation flag; Reel and Canva draft publishing endpoints require explicit authenticated publish request, global automation/master gates and Meta `FINISHED` status; webhook auto replies require the DM-specific flag, global automation flag and DB master switch; scheduler has its independent gates. The draft publish flow does not persist a separate approval ledger; explicit authenticated publish request is the operator approval action for now.
 - No live messages/posts, Canva/Meta API calls, OAuth, Render changes or deployment were attempted. Keep all live action flags OFF.
 - Outstanding: wait for PR #130 CI and review before merge; Part 1 must reconcile merged PR #128 status and inspect open backup PR #129; Part 3 must complete timezone readiness and Render review. Overall production readiness is not complete until all three parts report evidence.
+
+
+## Part 1 — PR #131 conflict recovery — 2026-11-01
+
+- Original documentation PR [#131](https://github.com/francistheroo/nova-instagram-ai/pull/131), branch `part1/production-readiness-audit`, head `7954b4705334b9dddbba3a0625657e947722f04a`, became diverged after main advanced: 4 commits ahead and 4 behind, merge base `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; GitHub reported `mergeable=false`.
+- Preserving the three documentation-only additions on a fresh branch from current main `e586310a25132129a9e059d744cf0da7ba7f6393`. This is a documentation transplant, not a force-push or application-code change.
+- Prior verified final-main CI evidence: [run #41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819) on main SHA `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`: 507 passed, 6 skipped, 40 warnings, 0 failed. It does not certify newer main commits.
+- Keep PR #131 open until replacement PR is created and verified; close it as superseded only after confirming all three documentation updates are preserved.
+- Overall production readiness remains incomplete pending Parts 2 and 3. No live publishing, deployment, or external integration was performed.
