@@ -47,6 +47,38 @@ app.include_router(admin_router)
 
 
 @app.on_event("startup")
+async def start_automatic_instagram_token_refresh():
+    if os.getenv("INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED", "false").lower() != "true":
+        return
+    if not os.getenv("DATABASE_URL", "").strip():
+        app.state.instagram_token_refresh_error = "database_not_configured"
+        return
+    try:
+        from app.instagram_oauth import _refresh_instagram_token_locked
+        from app.oauth_store import instagram_refresh_lock
+        from app.token_maintenance import token_refresh_loop
+
+        async def refresh_under_shared_lock():
+            with instagram_refresh_lock():
+                await _refresh_instagram_token_locked()
+
+        app.state.instagram_token_refresh_error = None
+        app.state.instagram_token_refresh_stop = asyncio.Event()
+        app.state.instagram_token_refresh_task = asyncio.create_task(
+            token_refresh_loop(
+                app.state.instagram_token_refresh_stop,
+                load_latest_instagram_token,
+                refresh_under_shared_lock,
+                on_error=lambda error: setattr(
+                    app.state, "instagram_token_refresh_error", error
+                ),
+            )
+        )
+    except Exception:
+        app.state.instagram_token_refresh_error = "startup_failed"
+
+
+@app.on_event("startup")
 async def start_auto_publisher():
     # The durable scheduler is opt-in and never starts from an API request.
     if os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() != "true":
@@ -70,12 +102,16 @@ async def start_auto_publisher():
 
 @app.on_event("shutdown")
 async def stop_auto_publisher():
-    stop = getattr(app.state, "nova_scheduler_stop", None)
-    task = getattr(app.state, "nova_scheduler_task", None)
-    if stop is not None:
-        stop.set()
-    if task is not None:
-        await task
+    for stop_name, task_name in (
+        ("nova_scheduler_stop", "nova_scheduler_task"),
+        ("instagram_token_refresh_stop", "instagram_token_refresh_task"),
+    ):
+        stop = getattr(app.state, stop_name, None)
+        task = getattr(app.state, task_name, None)
+        if stop is not None:
+            stop.set()
+        if task is not None:
+            await task
 
 
 class ReplyRequest(BaseModel):
@@ -198,7 +234,13 @@ async def health():
         "instagram_oauth_implemented": True,
         "instagram_token_refresh_implemented": True,
         "instagram_manual_token_refresh_implemented": True,
-        "instagram_automatic_token_refresh_implemented": False,
+        "instagram_automatic_token_refresh_implemented": True,
+        "instagram_automatic_token_refresh_enabled": os.getenv("INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED", "false").lower() == "true",
+        "instagram_automatic_token_refresh_running": (
+            hasattr(app.state, "instagram_token_refresh_task")
+            and not app.state.instagram_token_refresh_task.done()
+        ),
+        "instagram_automatic_token_refresh_error": getattr(app.state, "instagram_token_refresh_error", None),
         "instagram_webhooks_implemented": True,
         "instagram_webhook_receiver_implemented": True,
         "instagram_webhook_verification_route_implemented": True,
