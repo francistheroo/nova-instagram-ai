@@ -81,3 +81,15 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 ## Safety / scope
 
 This checkpoint records repository tests only. It does not authorize deployment, connecting an Instagram account, or enabling live automation.
+
+
+## Latest task closure — PR #122 and main CI verification
+
+| Check | Status | Evidence |
+|---|---|---|
+| PR #122 review | PASS | [PR #122](https://github.com/francistheroo/nova-instagram-ai/pull/122) merged as `6edf84e96b58e70a8523359fa5972363018a8cfd`. Reviewed `tests/test_canva_review.py`: disabled Instagram actions do not call Canva, insecure HTTP export URLs are rejected, and Meta states other than `FINISHED` cannot reach `media_publish`. |
+| PR-head CI | PASS | [Run #41293583471](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41293583471): 502 passed, 6 skipped, 0 failed. |
+| Current main CI | PASS | [Run #41295206264](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41295206264), push on current main commit `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`: job `test` completed successfully; log confirms 503 passed, 6 skipped, 40 warnings, 0 failed. |
+| Checkpoint refresh | PASS | This entry records both PR-head and current-main verification. |
+
+No live Canva/Meta publishing was performed; external calls in the regression tests are mocked. CI warnings are deprecation notices and did not fail the run. Live Instagram integration and production readiness remain outside this task and are still unverified.
