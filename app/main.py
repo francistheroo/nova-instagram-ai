@@ -24,7 +24,7 @@ from app.canva_review import router as canva_review_router
 from app.canva_direct_publish import router as canva_direct_publish_router
 from app.canva_direct_post import router as canva_direct_post_router
 from app.instagram_reels import router as instagram_reels_router
-from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
+from app.oauth_store import initialize_schema as initialize_oauth_schema, load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
 from app.auto_publisher import scheduler_loop, initialize_scheduler_schema, scheduler_timezone
 from app.security import require_user, require_master_enabled, master_enabled
@@ -57,6 +57,15 @@ async def start_automatic_instagram_token_refresh():
         from app.instagram_oauth import _refresh_instagram_token_locked
         from app.oauth_store import instagram_refresh_lock
         from app.token_maintenance import token_refresh_loop
+
+        # The refresh worker queries nova_instagram_tokens immediately. Ensure
+        # its idempotent OAuth schema exists before the task can start, so a
+        # fresh Render PostgreSQL database does not fail with UndefinedTable.
+        try:
+            initialize_oauth_schema()
+        except Exception:
+            app.state.instagram_token_refresh_error = "schema_initialization_failed"
+            return
 
         async def refresh_under_shared_lock():
             with instagram_refresh_lock():
