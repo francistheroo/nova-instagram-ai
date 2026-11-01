@@ -152,3 +152,14 @@ Add new entries at the top. Use this format:
 - [ ] Live messaging and publishing remain disabled during development.
 - [ ] Master recovery checkpoint reflects verified results and outstanding work.
 - [ ] All three parts have posted a final handoff in this file.
+
+### 2026-11-01 — Part 1 — production-readiness cycle kickoff audit
+
+- **Status:** VERIFIED for PR #128 synchronization/merge and final-main CI; open PR #129 reviewed and flagged as stale backup, not suitable for merge. Part 1 remains active for cross-part handoffs.
+- **Main commit:** c18af6a32870ad40ceb6735b5c8a368bd7861c9f (PR #128 merge).
+- **PR #128:** already merged, merge commit c18af6a32870ad40ceb6735b5c8a368bd7861c9f; rebased head 7ac3aee40ba4de7f852ae2643a7d38db4a9a49b6 was conflict-free against base 945e221a57e2e36e29d6aa1ca23208082686f856. [PR #128](https://github.com/francistheroo/nova-instagram-ai/pull/128).
+- **Current-main CI:** PASS — [run #41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819), push workflow on exact main merge commit c18af6a32870ad40ceb6735b5c8a368bd7861c9f; job test successful; logs confirm **507 passed, 6 skipped, 40 warnings, 0 failed**. All job steps completed.
+- **Open PR inventory:** only [PR #129](https://github.com/francistheroo/nova-instagram-ai/pull/129), “Backup/pr 113 before rebase”, was returned. It is a backup/archival branch, not a current feature PR: head d551cf6c11f733f954cebbbd7c3ee38374328e14, **4 ahead / 66 behind** main, diverged from merge base 77108de70fbed276ba8fdd360c3d33fb4e0490bd; no workflow runs are associated with its head. Its scheduler validation and stale-processing changes overlap current-main implementation/tests, but branch files differ because it is far behind. Do not merge or rebase this backup branch as a production PR. Recommend closing PR #129 as an archival backup after owner confirmation; preserve its branch if needed as a recovery reference.
+- **Changes made by Part 1:** documentation-only update on branch part1/production-readiness-audit; no application code, secrets, Render settings, or live integrations changed.
+- **Cross-part handoffs:** Part 2: supply this cycle's review evidence for Canva direct-publish bypass protections and regression tests; Part 3: supply this cycle's NOVA_TIMEZONE startup/readiness fix, tests, and Render readiness evidence. Keep all live flags and admin publish gates OFF. The coordination file's prior Part 3 status says NOT STARTED and must be updated by Part 3 with current evidence.
+- **Outstanding:** overall production-readiness cycle is NOT COMPLETE until Parts 2 and 3 provide evidence and shared handoffs are reconciled. Render, Meta OAuth, Canva live connection, and live publishing remain unverified.
