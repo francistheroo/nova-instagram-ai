@@ -167,3 +167,13 @@ eserves the latest Part 1 section before merging. Address timezone startup valid
 - [ ] Live messaging and publishing remain disabled during development.
 - [ ] Master recovery checkpoint reflects verified results and outstanding work.
 - [ ] All three parts have posted a final handoff in this file.
+
+
+### 2026-11-01 — Part 1 — PR #131 conflict recovery v3
+
+- **Status:** IN PROGRESS — prior replacement branches became stale while main advanced concurrently.
+- **Branch:** `part1/pr131-conflict-fix-v3`.
+- **Base SHA:** `f25e908bba47ad23f297f8642b0f273b826d2ebe`.
+- **Changes:** Documentation-only synchronization in the three Part 1 checkpoint files; no application code, tests, live settings, deployment, or external integration changed.
+- **CI:** Not yet verified for this exact branch head.
+- **Next:** Check compare/mergeability and exact-head CI. Overall readiness remains incomplete until Parts 2 and 3 are independently verified.
