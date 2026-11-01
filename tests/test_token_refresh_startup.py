@@ -5,6 +5,9 @@ import app.token_maintenance as token_maintenance
 
 
 def test_token_refresh_initializes_oauth_schema_before_starting_worker(monkeypatch):
+    for name in ("instagram_token_refresh_task", "instagram_token_refresh_stop", "instagram_token_refresh_error"):
+        if hasattr(main.app.state, name):
+            delattr(main.app.state, name)
     monkeypatch.setenv("INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED", "true")
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/nova")
     events = []
@@ -34,6 +37,9 @@ def test_token_refresh_initializes_oauth_schema_before_starting_worker(monkeypat
 
 
 def test_token_refresh_worker_does_not_start_when_oauth_schema_initialization_fails(monkeypatch):
+    for name in ("instagram_token_refresh_task", "instagram_token_refresh_stop", "instagram_token_refresh_error"):
+        if hasattr(main.app.state, name):
+            delattr(main.app.state, name)
     monkeypatch.setenv("INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED", "true")
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/nova")
     started = []
