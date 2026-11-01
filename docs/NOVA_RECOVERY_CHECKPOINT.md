@@ -352,9 +352,8 @@ The user supplied this status response from the NOVA service:
 - Outstanding: PR #130 CI passed on latest head but remains open pending independent review/merge decision. Part 1's documentation PR #131 is now closed unmerged, and stale backup PR #129 is also closed unmerged. Part 1 should record these final dispositions in its coordination section and review PR #130. Part 3 has opened timezone/readiness PR #132 (head `fc587f4c1b58cc38d58e9dff58894e7e6943a3bc`); it remains open/non-mergeable and no workflow run was returned for the latest inspected head `fc587f4c1b58cc38d58e9dff58894e7e6943a3bc`. Its test/CI and Render review remain to be verified. PR #130 and #132 both touch `app/main.py`; coordinate merge order and re-check mergeability/rebase after the first merge. Overall production readiness is not complete until all three parts report evidence.
 
 
-## Part 1 — PR #131 conflict recovery v2 — 2026-11-01
+## Part 1 — PR #131 conflict recovery v3 — 2026-11-01
 
-- The first replacement PR #134 also became conflicted after `main` advanced. It is superseded by the fresh documentation-only branch `part1/pr131-conflict-fix-v2`, created directly from main at `67de19ef25aaada3e0bb133fd0a2bb187e38e237`.
-- This update records the synchronization only; no application code, live settings, deployment, or external integration changed.
-- Existing CI evidence from ancestor commits is not represented as current-main or replacement-PR CI. Verify the new branch's own workflow before reporting a pass.
-- Overall production readiness remains incomplete pending independent Part 2 and Part 3 evidence.
+- Replacement PR #134 and its first resynchronization attempt became stale as `main` continued advancing. This documentation-only retry is based on the latest observed main snapshot `f25e908bba47ad23f297f8642b0f273b826d2ebe`.
+- No application code, live settings, deployment, or external integration changed. Ancestor CI is not evidence for this branch; exact-head CI must be checked separately.
+- Overall production readiness remains incomplete pending Parts 2 and 3.
