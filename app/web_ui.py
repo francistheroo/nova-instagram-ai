@@ -19,11 +19,18 @@ async def nova_content_studio():
 <style>
 :root{color-scheme:dark;--bg:#050505;--panel:#101010;--line:#282828;--text:#f5f5f5;--muted:#a4a4a4;--accent:#8cffc7}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#13231c 0,#050505 48%);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif}
-main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.logo{width:46px;height:46px;border:1px solid #3e7459;border-radius:15px;display:grid;place-items:center;color:var(--accent);font-weight:900;letter-spacing:-2px;background:#0b1711}.eyebrow{font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.15em}.brand h1{font-size:24px;margin:0}.sub{color:var(--muted);margin:3px 0 0}.notice{border:1px solid #39473f;background:#0d1510;border-radius:14px;padding:12px 14px;color:#cbd8cf;margin:20px 0 24px;font-size:14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0}.card h2{font-size:19px;margin:0 0 5px}.desc{color:var(--muted);font-size:14px;margin:0 0 18px}label{display:block;font-size:13px;color:#d8d8d8;margin:13px 0 6px}input,select,textarea{font:inherit;width:100%;background:#080808;color:var(--text);border:1px solid #363636;border-radius:10px;padding:11px 12px;outline:none}textarea{min-height:90px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:var(--accent)}button{margin-top:16px;border:0;border-radius:11px;background:var(--accent);color:#06110a;font-weight:750;padding:12px 16px;font-size:14px;cursor:pointer;width:100%}button:disabled{opacity:.6;cursor:wait}.output{margin-top:15px;border-top:1px solid var(--line);padding-top:13px;white-space:pre-wrap;overflow-wrap:anywhere;color:#e6e6e6;min-height:0}.output:empty{display:none}.status{color:var(--muted);font-size:13px;margin-top:9px}.image-preview{display:block;max-width:100%;max-height:420px;margin-top:12px;border-radius:12px;border:1px solid var(--line)}.footer{color:var(--muted);font-size:12px;margin-top:20px}@media(max-width:700px){.grid{grid-template-columns:1fr}main{padding:20px 13px 40px}.card{padding:16px}}
+main{max-width:980px;margin:auto;padding:28px 18px 60px}.authbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#101010}.authstatus{color:var(--accent);font-size:13px}.login{max-width:420px;margin:48px auto;padding:22px;border:1px solid var(--line);border-radius:16px;background:#101010}.login p{color:var(--muted);font-size:14px}.login button,.authbar button{width:auto;margin:0}.auth-error{color:#ff9c9c;font-size:13px;min-height:20px}.studio-hidden{display:none!important}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.logo{width:46px;height:46px;border:1px solid #3e7459;border-radius:15px;display:grid;place-items:center;color:var(--accent);font-weight:900;letter-spacing:-2px;background:#0b1711}.eyebrow{font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.15em}.brand h1{font-size:24px;margin:0}.sub{color:var(--muted);margin:3px 0 0}.notice{border:1px solid #39473f;background:#0d1510;border-radius:14px;padding:12px 14px;color:#cbd8cf;margin:20px 0 24px;font-size:14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0}.card h2{font-size:19px;margin:0 0 5px}.desc{color:var(--muted);font-size:14px;margin:0 0 18px}label{display:block;font-size:13px;color:#d8d8d8;margin:13px 0 6px}input,select,textarea{font:inherit;width:100%;background:#080808;color:var(--text);border:1px solid #363636;border-radius:10px;padding:11px 12px;outline:none}textarea{min-height:90px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:var(--accent)}button{margin-top:16px;border:0;border-radius:11px;background:var(--accent);color:#06110a;font-weight:750;padding:12px 16px;font-size:14px;cursor:pointer;width:100%}button:disabled{opacity:.6;cursor:wait}.output{margin-top:15px;border-top:1px solid var(--line);padding-top:13px;white-space:pre-wrap;overflow-wrap:anywhere;color:#e6e6e6;min-height:0}.output:empty{display:none}.status{color:var(--muted);font-size:13px;margin-top:9px}.image-preview{display:block;max-width:100%;max-height:420px;margin-top:12px;border-radius:12px;border:1px solid var(--line)}.footer{color:var(--muted);font-size:12px;margin-top:20px}@media(max-width:700px){.grid{grid-template-columns:1fr}main{padding:20px 13px 40px}.card{padding:16px}}
 </style>
 </head>
 <body>
 <main>
+<section class="login" id="loginPanel">
+<h2>Sign in to NOVA</h2><p>Use the admin username and password configured on the NOVA server.</p>
+<form id="loginForm"><label for="loginUsername">Username</label><input id="loginUsername" autocomplete="username" required maxlength="128">
+<label for="loginPassword">Password</label><input id="loginPassword" type="password" autocomplete="current-password" required maxlength="256">
+<button type="submit">Sign in</button><div class="auth-error" id="loginError" role="alert"></div></form>
+</section>
+<div class="authbar studio-hidden" id="authBar"><span class="authstatus" id="authStatus" role="status">Checking sign-in status…</span><button id="signOutButton" type="button">Sign out</button></div>
 <header class="brand"><div class="logo">N</div><div><div class="eyebrow">AI assistant</div><h1>NOVA Content Studio</h1><p class="sub">Create ideas and captions before you post.</p></div></header>
 <div class="notice"><strong>Review mode:</strong> This page only creates drafts. It does not publish, schedule, like, follow, or message anyone. AI provider settings must be configured on the server.</div>
 <div class="grid">
@@ -58,6 +65,42 @@ main{max-width:980px;margin:auto;padding:28px 18px 60px}.brand{display:flex;alig
 <p class="footer">NOVA Content Studio · Drafts are AI-generated and may need fact-checking and editing. Trend data is not fetched by this tool.</p>
 </main>
 <script>
+const loginPanel=document.getElementById('loginPanel');
+const authBar=document.getElementById('authBar');
+const loginForm=document.getElementById('loginForm');
+const authStatus=document.getElementById('authStatus');
+function setStudioVisible(signedIn){
+  loginPanel.classList.toggle('studio-hidden',signedIn);
+  authBar.classList.toggle('studio-hidden',!signedIn);
+  for(const selector of ['.brand','.notice','.grid','.footer']) document.querySelector(selector)?.classList.toggle('studio-hidden',!signedIn);
+}
+async function refreshAuth(){
+  try{
+    const r=await fetch('/auth/status',{credentials:'same-origin'});
+    const s=await r.json();
+    setStudioVisible(Boolean(s.authenticated));
+    authStatus.textContent=s.authenticated?'Signed in as '+s.username:'Signed out';
+  }catch(e){setStudioVisible(false);document.getElementById('loginError').textContent='Could not check sign-in status. Refresh and try again.';}
+}
+loginForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const error=document.getElementById('loginError');error.textContent='';
+  const button=loginForm.querySelector('button');button.disabled=true;
+  try{
+    const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({username:document.getElementById('loginUsername').value,password:document.getElementById('loginPassword').value})});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Sign in failed.');
+    document.getElementById('loginPassword').value='';
+    await refreshAuth();
+  }catch(e){error.textContent=e.message||'Sign in failed.';}
+  finally{button.disabled=false;}
+});
+document.getElementById('signOutButton').addEventListener('click',async()=>{
+  const button=document.getElementById('signOutButton');button.disabled=true;
+  try{const r=await fetch('/auth/logout',{method:'POST',credentials:'same-origin'});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Sign out failed.');await refreshAuth();}
+  catch(e){authStatus.textContent=e.message||'Sign out failed.';}
+  finally{button.disabled=false;}
+});
+refreshAuth();
 async function submitDraft(form, status, output, path, buildBody, render) {
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true; status.textContent = 'Generating…'; output.textContent = '';
