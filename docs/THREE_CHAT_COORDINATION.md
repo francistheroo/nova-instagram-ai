@@ -61,7 +61,7 @@ Tasks:
 **Current status:** CODE AND PR CI VERIFIED — focused hardening PR #130 is open for review. Direct Canva photo/Reel routes and the legacy one-step image publisher are disabled in the branch; do not mark the full three-part cycle complete yet.
 
 **Latest update / handoff — 2026-11-01:**
-- Re-read the coordination hub on current main and audited current main commit `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`. PR #128 has since merged as that commit; the old coordination text elsewhere in this hub still contains stale PR #128 open/conflict statements. Part 1's current-cycle documentation PR [#131](https://github.com/francistheroo/nova-instagram-ai/pull/131) records its audit, but remains open and currently reports mergeable=false. Please review PR #130 and sync the docs without losing the Part 2 section.
+- Re-read the coordination hub on current main and audited current main commit `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`. PR #128 has since merged as that commit; the old coordination text elsewhere in this hub still contains stale PR #128 open/conflict statements. Part 1's documentation PR [#131](https://github.com/francistheroo/nova-instagram-ai/pull/131) is now closed unmerged; stale backup PR [#129](https://github.com/francistheroo/nova-instagram-ai/pull/129) is also closed unmerged. Part 1's audit evidence exists in the PR/checkpoint, but its coordination section remains stale. Please update your hub section and review PR #130.
 - **Direct Canva bypass found:** `app/canva_direct_post.py` and `app/canva_direct_publish.py` previously called Canva export and Meta `media_publish` directly after general flag, NOVA API key, admin and DB master checks; they did not enforce the separate review/draft flow. This allowed a direct Canva publish without review.
 - **Additional direct image bypass found:** `app/main.py:/instagram/publish-image` also created and published a media container in one request after authorization/feature gates, without an explicit draft/review step.
 - **Hardening in PR #130:** branch `security/disable-canva-direct-publish-bypass`, PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130). The two legacy Canva routes now return HTTP 410 with `review_required=true` and `published=false`; their external Canva/Meta publishing logic has been removed. The generic one-step `/instagram/publish-image` route also returns HTTP 410. All retain API-key, admin and master-switch dependencies before returning the disabled response. No external calls can be made through these legacy routes.
@@ -72,7 +72,7 @@ Tasks:
 - **Files changed on branch (6):** `app/canva_direct_post.py`, `app/canva_direct_publish.py`, `app/main.py`, `tests/test_canva_direct_post.py`, `tests/test_canva_direct_publish.py`, `tests/test_live_action_review_gates.py`. Compare to current main shows 8 commits ahead / 3 behind due to later documentation commits; GitHub reports PR #130 mergeable.
 - **Development posture:** do not enable `INSTAGRAM_AUTOMATION_ENABLED`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED`, `NOVA_SCHEDULER_ENABLED`, or any direct-publish setting during development. No real Instagram messages/posts, Canva API calls, OAuth, Render changes or deployment were performed.
 - **Part 1 handoff:** PR #128 is now merged in main at `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; update stale coordination status and inspect open PR [#129](https://github.com/francistheroo/nova-instagram-ai/pull/129), a backup of PR #113 with scheduler code changes, reported open and non-mergeable. Determine whether it is needed or should be closed; do not merge it blindly.
-- **Part 3 handoff:** Part 3 has opened timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132), branch `fix/scheduler-timezone-readiness`, latest inspected head `d98965e92ced00428d0b9d717a8f5d4ccba9095f`; it is open and currently reports non-mergeable. Both PR #130 and PR #132 modify `app/main.py` in different areas (direct image route vs scheduler startup/readiness), so coordinate merge order and re-check/rebase the remaining branch after the first merges. Please complete test/CI review and Render evidence separately. Canva/Render live connections remain unverified.
+- **Part 3 handoff:** Part 3 has opened timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132), branch `fix/scheduler-timezone-readiness`, latest inspected head `d98965e92ced00428d0b9d717a8f5d4ccba9095f`; it is open and currently reports non-mergeable. Both PR #130 and PR #132 modify `app/main.py` in different areas (direct image route vs scheduler startup/readiness), so coordinate merge order and re-check/rebase the remaining branch after the first merges. Latest workflow lookup returned no CI run for the inspected PR #132 head. Please complete test/CI review and Render evidence separately. Canva/Render live connections remain unverified.
 - Overall production-readiness work is **NOT COMPLETE** until Parts 1 and 3 post current-cycle evidence and PR #130 receives Part 1 review/merge decision.
 ### Part 3 — Integrations, scheduling and deployment
 
@@ -88,14 +88,7 @@ Tasks:
 **Current status:** NOT STARTED for this coordination cycle.
 
 **Latest update / handoff:**
-- Previous known result: PR #124 updated the master recovery checkpoint for Canva, scheduler and Render audit. Re-read the current checkpoint and verify the implementation before repeating work.
-- Do not infer live Render readiness from repository configuration alone.
-
-## Shared handoff log
-
-Add new entries at the top. Use this format:
-
-### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
+- Previous known result: PR #124 updated the master recovery checkpoint for Canva, scheduler and Render audit. Re-read the current checkpoint and ve### 2026-11-01 — Part 2 — production-readiness live-action gate hardening
 
 - **Status:** VERIFIED — PR-head CI passed; PR remains open for independent review.
 - **Branch / PR:** `security/disable-canva-direct-publish-bypass`, [PR #130](https://github.com/francistheroo/nova-instagram-ai/pull/130), open, GitHub reports mergeable.
@@ -127,6 +120,8 @@ Add new entries at the top. Use this format:
 - **CI evidence:** PR-head CI only; current main combined status had no entries and no current-main workflow run was returned.
 - **Risks or blockers:** PR #128 is 1 commit ahead/5 behind current main despite GitHub reporting mergeable; its base predates the latest Part 1 checkpoint edits in the same recovery file.
 - **Next part / requested action:** Part 3: rebase/update PR #128 against current main or verify the merge preserves the latest Part 1 section before merging. Address timezone startup validation in a separate code/test PR. Part 2: update its section in this hub when its security audit is complete.
+
+eserves the latest Part 1 section before merging. Address timezone startup validation in a separate code/test PR. Part 2: update its section in this hub when its security audit is complete.
 
 ### 2026-11-01 — Part 2 — current-main security and automation re-audit
 
