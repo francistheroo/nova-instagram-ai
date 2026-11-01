@@ -49,4 +49,5 @@ The first three settings keep publishing, automatic DMs, and scheduled publishin
 
 - Tests use mocked providers; no live Instagram messages or content are sent by this change.
 - Production Render environment values cannot be verified from repository source. Confirm the three live-action flags are false in deployment settings before any development deployment.
-- Run CI on this branch and preserve this checkpoint with the resulting workflow status before merge.
+- Draft PR: [#123](https://github.com/francistheroo/nova-instagram-ai/pull/123).
+- GitHub Actions run #327 (run ID `41294344287`) started for this PR; the `test` job was still initializing its PostgreSQL service when this checkpoint was last updated. Recheck the run and append the final result before merge.
