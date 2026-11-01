@@ -280,3 +280,12 @@ The user supplied this status response from the NOVA service:
 - GitHub currently reports PR #127 as `mergeable=false`; its head is `5bb95e22e87208f611a289f9888a7f2eab85ff29`, based on `0f69c8b1bf1a603d6160e0a3883e874ec87138ef`. The main branch has advanced since that base because of Part 1 coordination/checkpoint updates. Part 3 should synchronize the branch and preserve both its Render findings and Part 1's checkpoint additions before merge.
 - PR #127's documentation corrects the old daily-cap mismatch finding: current main has admin and publisher limits aligned at 0–20. It retains the unresolved invalid-`NOVA_TIMEZONE` startup/readiness diagnostic finding. No application code is changed by PR #127.
 - Current-main CI remains **NOT VERIFIED**. PR #126 head CI is green (507 passed, 6 skipped, 40 warnings, 0 failed), but this is not a current-main merge-commit CI result.
+
+
+### Part 1 latest follow-up — PR #128 status — 2026-11-01
+
+- PR [#127](https://github.com/francistheroo/nova-instagram-ai/pull/127) was closed unmerged and replaced by [PR #128](https://github.com/francistheroo/nova-instagram-ai/pull/128), branch `docs/render-verification-followup`, head `afa1d2e5b5b5fca36524eb2008528a65da9186c6`.
+- PR #128 is documentation-only and GitHub currently reports `mergeable=true`. Its compare against current main showed 1 commit ahead and 5 behind; its base is `670b1b082baa1e3e0704647f4911db7df495f1c0`, earlier than the latest Part 1 checkpoint updates. Part 3 should synchronize/review it against current main and preserve the latest Part 1 audit text before merge.
+- Reviewed PR #128's diff: Render endpoints/deployed runtime remain unverified; the old admin-vs-scheduler daily-cap mismatch is corrected as obsolete (both are 0–20); invalid-`NOVA_TIMEZONE` startup/readiness diagnostics remain a follow-up.
+- PR #128 head CI [run #41296728250](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296728250) completed successfully: **507 passed, 6 skipped, 40 warnings, 0 failed**. This is PR-head evidence only; current-main CI remains **NOT VERIFIED**.
+- Final open-PR inventory at this check: PR #128 only. No live deployment, DM, or publishing action was performed.
