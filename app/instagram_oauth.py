@@ -15,6 +15,11 @@ from fastapi.responses import RedirectResponse
 from app.oauth_security import OAuthSecurityError, create_oauth_state, validate_oauth_state
 from app.security import require_user
 from app.oauth_utils import token_expiry_from_seconds
+from app.instagram_webhook_subscription import (
+    _require_webhook_api_key,
+    get_instagram_webhook_subscription,
+    update_instagram_webhook_subscription,
+)
 from app.oauth_store import (
     OAuthStoreError,
     InstagramRefreshInProgress,
@@ -292,3 +297,24 @@ async def _refresh_instagram_token_locked():
         "expires_at": refreshed_expiry.isoformat() if refreshed_expiry else None,
         "token_returned": False,
     }
+
+
+@router.post("/webhooks/subscribe")
+async def subscribe_instagram_webhooks(x_nova_api_key: str | None = Header(default=None)):
+    """Subscribe the connected Instagram Login account to supported messaging events."""
+    _require_webhook_api_key(x_nova_api_key)
+    return await update_instagram_webhook_subscription(subscribe=True)
+
+
+@router.get("/webhooks/subscription")
+async def instagram_webhook_subscription_status(x_nova_api_key: str | None = Header(default=None)):
+    """Read the connected Instagram account's webhook subscription status."""
+    _require_webhook_api_key(x_nova_api_key)
+    return await get_instagram_webhook_subscription()
+
+
+@router.delete("/webhooks/subscription")
+async def unsubscribe_instagram_webhooks(x_nova_api_key: str | None = Header(default=None)):
+    """Remove the connected account's subscription from NOVA webhook events."""
+    _require_webhook_api_key(x_nova_api_key)
+    return await update_instagram_webhook_subscription(subscribe=False)
