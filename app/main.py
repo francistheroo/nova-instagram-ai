@@ -151,7 +151,7 @@ def instagram_config():
             detail="Instagram is not connected yet. Configure OAuth and PostgreSQL, or set INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_USER_ID in Render.",
         )
     base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
-    version = os.getenv("META_API_VERSION", "v25.0").strip("/")
+    version = os.getenv("META_API_VERSION", "v26.0").strip("/")
     return token, user_id, f"{base}/{version}"
 
 async def meta_request(method: str, path: str, *, params: Optional[dict] = None, data: Optional[dict] = None) -> dict[str, Any]:
