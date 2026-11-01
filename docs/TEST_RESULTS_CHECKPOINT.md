@@ -51,7 +51,7 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 ## Not yet verified
 
 - Webhook duplicate/idempotency review: existing tests cover duplicate message IDs, retryable AI/Meta failures, post-send history failure, and ambiguous send timeout; further concurrent-delivery/database integration testing remains pending.
-- Scheduler reliability: existing tests cover daily-cap reservation and midnight local-date handling. Stale `processing` publish rows intentionally are not auto-reclaimed because Meta may already have accepted a publish before a worker crash; they need an explicit reconciliation policy. Downtime longer than the one-minute catch-up window can miss a slot; decide whether missed slots should be skipped or backfilled.
+- Scheduler reliability: existing tests cover daily-cap reservation and midnight local-date handling. Processing rows older than two hours are now changed to `uncertain`, retain their daily-cap reservation, and are never automatically retried because Meta may already have accepted the publish before a worker crash. Manual reconciliation is still needed to decide the final outcome. Downtime longer than the one-minute catch-up window can miss a slot; decide whether missed slots should be skipped or backfilled.
 - Ambiguous outbound DM delivery remains a manual-reconciliation case: send timeouts and Meta HTTP 5xx responses are marked uncertain and are not automatically resent. No automated reconciliation UI/workflow is implemented.
 - Scheduler daily limits and timezone boundary cases beyond the already merged midnight-slot fix.
 - Live Meta OAuth authorization and token exchange.

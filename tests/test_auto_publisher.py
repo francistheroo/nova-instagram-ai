@@ -139,3 +139,43 @@ def test_ambiguous_meta_publish_response_uses_uncertain_state(monkeypatch):
         )
 
     assert [call[1] for call in calls] == ["ig-user-1/media", "ig-user-1/media_publish"]
+
+
+def test_stale_processing_runs_become_uncertain_and_are_not_retried(monkeypatch):
+    class UpdateCursor:
+        def fetchall(self):
+            return [(41,), (42,)]
+
+    class UpdateConnection:
+        def __init__(self):
+            self.calls = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.calls.append((sql, params))
+            return UpdateCursor()
+
+    connection = UpdateConnection()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example/test")
+    monkeypatch.setattr(publisher.psycopg, "connect", lambda *args, **kwargs: connection)
+
+    changed = publisher._mark_stale_processing_uncertain(120)
+
+    assert changed == 2
+    sql = " ".join(connection.calls[0][0].split())
+    assert "SET status='uncertain'" in sql
+    assert "error_code='worker_interrupted_outcome_unknown'" in sql
+    assert "WHERE status='processing'" in sql
+    assert "RETURNING id" in sql
+    assert connection.calls[0][1] == (120,)
+
+
+@pytest.mark.parametrize("minutes", [True, 0, 14, 10081, "120", None])
+def test_stale_processing_reconciliation_rejects_invalid_threshold(minutes):
+    with pytest.raises(ValueError):
+        publisher._mark_stale_processing_uncertain(minutes)
