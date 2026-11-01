@@ -887,3 +887,162 @@ def test_instagram_token_refresh_requires_admin_even_with_api_key(monkeypatch):
     )
 
     assert response.status_code == 401
+
+
+def _configure_webhook_subscription(monkeypatch):
+    from contextlib import nullcontext
+    from app import instagram_webhook_subscription as subscriptions
+
+    monkeypatch.setenv("NOVA_API_KEY", "subscription-test-key")
+    monkeypatch.setenv("META_API_VERSION", "v25.0")
+    monkeypatch.setattr(subscriptions, "load_latest_instagram_token", lambda: {
+        "instagram_user_id": "123456",
+        "access_token": "private-access-token",
+    })
+    monkeypatch.setattr(subscriptions, "instagram_refresh_lock", lambda: nullcontext())
+    return subscriptions
+
+
+def test_webhook_subscription_requires_api_key(monkeypatch):
+    monkeypatch.delenv("NOVA_API_KEY", raising=False)
+    response = client.post("/oauth/instagram/webhooks/subscribe")
+    assert response.status_code == 503
+
+    monkeypatch.setenv("NOVA_API_KEY", "subscription-test-key")
+    response = client.post(
+        "/oauth/instagram/webhooks/subscribe",
+        headers={"X-NOVA-API-Key": "incorrect"},
+    )
+    assert response.status_code == 401
+
+
+def test_subscribe_instagram_webhooks_uses_me_edge_and_messages_only(monkeypatch):
+    subscriptions = _configure_webhook_subscription(monkeypatch)
+    calls = []
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return {"success": True}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def request(self, method, url, *, params, headers):
+            calls.append((method, url, params, headers))
+            return FakeResponse()
+
+    monkeypatch.setattr(subscriptions.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post(
+        "/oauth/instagram/webhooks/subscribe",
+        headers={"X-NOVA-API-Key": "subscription-test-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "subscribed",
+        "fields": ["messages"],
+        "account_token_exposed": False,
+    }
+    assert calls[0][0] == "POST"
+    assert calls[0][1] == "https://graph.instagram.com/v25.0/me/subscribed_apps"
+    assert calls[0][2] == {"subscribed_fields": "messages"}
+    assert calls[0][3] == {"Authorization": "Bearer private-access-token"}
+    assert "private-access-token" not in response.text
+
+
+def test_instagram_webhook_subscription_status_reports_subscribed_fields(monkeypatch):
+    subscriptions = _configure_webhook_subscription(monkeypatch)
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return {"data": [{"id": "app-id", "subscribed_fields": ["messages", "comments"]}]}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *, headers):
+            assert url == "https://graph.instagram.com/v25.0/me/subscribed_apps"
+            assert headers == {"Authorization": "Bearer private-access-token"}
+            return FakeResponse()
+
+    monkeypatch.setattr(subscriptions.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/instagram/webhooks/subscription",
+        headers={"X-NOVA-API-Key": "subscription-test-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "subscribed"
+    assert response.json()["fields"] == ["comments", "messages"]
+    assert response.json()["required_fields"] == ["messages"]
+    assert "private-access-token" not in response.text
+
+
+def test_instagram_webhook_subscription_status_handles_not_subscribed(monkeypatch):
+    subscriptions = _configure_webhook_subscription(monkeypatch)
+
+    class FakeResponse:
+        is_error = False
+
+        def json(self):
+            return {"data": []}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(subscriptions.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get(
+        "/oauth/instagram/webhooks/subscription",
+        headers={"X-NOVA-API-Key": "subscription-test-key"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "not_subscribed"
+
+
+def test_instagram_webhook_subscription_does_not_expose_provider_errors(monkeypatch):
+    subscriptions = _configure_webhook_subscription(monkeypatch)
+
+    class FakeResponse:
+        is_error = True
+        status_code = 403
+
+        def json(self):
+            return {"error": {"message": "sensitive provider diagnostic"}}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def request(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(subscriptions.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.post(
+        "/oauth/instagram/webhooks/subscribe",
+        headers={"X-NOVA-API-Key": "subscription-test-key"},
+    )
+    assert response.status_code == 409
+    assert "sensitive provider diagnostic" not in response.text
+    assert "private-access-token" not in response.text
