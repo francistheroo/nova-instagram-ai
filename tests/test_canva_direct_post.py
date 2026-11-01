@@ -25,7 +25,7 @@ def test_legacy_canva_photo_publish_is_permanently_disabled_even_when_all_flags_
     async def fail_if_called(*args, **kwargs):
         raise AssertionError("Legacy direct endpoint must never call Canva")
 
-    monkeypatch.setattr(canva_direct_post, "_canva_request", fail_if_called)
+    monkeypatch.setattr(canva_direct_post, "_canva_request", fail_if_called, raising=False)
     response = client.post(
         "/canva/instagram-posts/publish",
         headers={"X-NOVA-API-Key": "test-secret"},
