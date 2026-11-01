@@ -305,3 +305,10 @@ The user supplied this status response from the NOVA service:
 - Current `.env.example` sets `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false`; `NOVA_TIMEZONE=Asia/Kolkata`. Production Render values remain unverified.
 - PR #127 was closed without merging; its documentation-only Render follow-up therefore did not update main. Current-main CI remains unverified; PR #126 head CI run #41296358475 passed 507 tests, 6 skipped, 40 warnings, 0 failures (PR-head evidence only).
 - Handoffs: Part 1 should refresh PR #127 inventory and seek current-main CI evidence. Part 3 should address invalid `NOVA_TIMEZONE` startup/readiness validation and keep direct Canva publishing routes (which bypass per-item review) disabled. Live Meta OAuth/permissions, webhook delivery, Render configuration/health, and Canva connection remain unverified. No live messages/posts, deployment, or external setting changes were performed.
+
+
+### Part 1 correction — PR #128 branch synchronization — 2026-11-01
+
+- A fresh comparison against current main (`d154ca50db4dcd6f60207ad038625f08abbacb0e`) now reports PR #128 as **1 commit ahead / 10 commits behind**, diverged, with GitHub `mergeable=false`. This supersedes the earlier mergeable=true / 1-ahead-5-behind observation.
+- PR #128 head remains `afa1d2e5b5b5fca36524eb2008528a65da9186c6`, based on `670b1b082baa1e3e0704647f4911db7df495f1c0`. Part 3 should rebase/update against current main, preserve all Part 1/Part 2 checkpoint and coordination additions, and rerun CI before merging.
+- PR #128's existing successful run #41296728250 is on its current PR head and records **507 passed, 6 skipped, 40 warnings, 0 failed**; it does not verify a rebased head or current main.
