@@ -336,3 +336,17 @@ The user supplied this status response from the NOVA service:
 - Therefore the current Render deployment, deploy commit, service health, runtime logs, health-check configuration, attached database, and private environment settings remain **UNVERIFIED**. Endpoint retrieval failure is not proof that the service is down.
 - No Render settings, secrets, database schema, or deployment were changed. No Instagram messaging or publishing was performed. Keep live actions disabled during development.
 - To complete live verification, the owner must provide non-sensitive screenshots or copied text from the Render service's latest deploy event and logs, service settings (build/start/health-check configuration), and database attachment overview. Redact all environment values, connection strings, tokens, and credentials. Once those details are available, compare the deployed commit/configuration with the repository and retry the public endpoints.
+
+
+---
+
+## Part 2 production-readiness security hardening — 2026-11-01
+
+- Current main base reviewed: `c18af6a32870ad40ceb6735b5c8a368bd7861c9f` (includes merged PR #128 Render documentation follow-up).
+- Security finding: the legacy direct Canva photo and Reel endpoints (`app/canva_direct_post.py`, `app/canva_direct_publish.py`) could export from Canva and publish directly after general auth/automation gates, without the separate review/draft path. The one-step `/instagram/publish-image` endpoint also created and published in a single request without a review step.
+- PR #130 branch `security/disable-canva-direct-publish-bypass` disables all three legacy one-step endpoints with HTTP 410, `published=false`, and `review_required=true`. API-key, admin and master-switch dependencies remain in place before the rejection response. Canva/Meta publishing code was removed from the direct Canva modules.
+- Regression tests replace former success-path tests with assertions that direct Canva photo/Reel endpoints remain disabled even when `INSTAGRAM_AUTOMATION_ENABLED=true`, and add `tests/test_live_action_review_gates.py` to ensure the generic image publisher cannot call Meta.
+- Latest PR #130 head at checkpoint update: `7437f07b7a6a977c984e9cc1c5b6eff4bcc301e7`. PR is open and mergeable. CI run [#41298463804](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298463804) is still in progress; test result is pending, not passed.
+- Other live-action route review: comment and DM replies require admin/API key/master/global automation flag; Reel and Canva draft publishing endpoints require explicit authenticated publish request, global automation/master gates and Meta `FINISHED` status; webhook auto replies require the DM-specific flag, global automation flag and DB master switch; scheduler has its independent gates. The draft publish flow does not persist a separate approval ledger; explicit authenticated publish request is the operator approval action for now.
+- No live messages/posts, Canva/Meta API calls, OAuth, Render changes or deployment were attempted. Keep all live action flags OFF.
+- Outstanding: wait for PR #130 CI and review before merge; Part 1 must reconcile merged PR #128 status and inspect open backup PR #129; Part 3 must complete timezone readiness and Render review. Overall production readiness is not complete until all three parts report evidence.
