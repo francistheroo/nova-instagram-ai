@@ -260,3 +260,15 @@ The user supplied this status response from the NOVA service:
 - Add/document `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED` with a safe default and reconcile the README/`.env.example` provider-order default.
 - Identify and resolve the exact PostgreSQL table behind the previously reported token-refresh `UndefinedTable` before declaring refresh healthy.
 - Live Render health, current deployment commit, current environment values, live Canva OAuth, and live Meta connection remain unverified. No deployment, environment mutation, live publish, or DM send was performed for this audit.
+
+
+---
+
+## Render verification follow-up — 2026-11-01
+
+- Attempted to retrieve the deployed public endpoints `https://nova-instagram-ai.onrender.com/health` and `https://nova-instagram-ai.onrender.com/integrations/status` during this follow-up. Both requests were inaccessible from the audit environment, so live Render status, deployed commit, and current runtime configuration remain **UNVERIFIED**. This is not evidence that the service is down.
+- Re-checked current `main` source: `app/admin.py` validates both daily caps with `Field(ge=0, le=20)`; `app/auto_publisher.py` accepts integer caps from 0 through 20. The previously recorded daily-cap mismatch (admin accepts 50 vs scheduler 0–20) is **incorrect and superseded**; the two current limits are aligned at 20.
+- The timezone issue remains valid: `app/main.py:start_auto_publisher` starts the scheduler task without validating `NOVA_TIMEZONE`; `app/auto_publisher.py:scheduler_loop` constructs `ZoneInfo` inside its recurring loop. An invalid timezone can therefore leave the scheduler task failing after startup rather than reporting a clear startup readiness error. A focused code/test change is still needed; no untested production change was made in this verification pass.
+- The historical token-refresh `UndefinedTable` report is not confirmed against the current deployed database. Do not run schema initialization or alter Render's database until the service's actual `DATABASE_URL` target and backup state are confirmed by the owner in the Render dashboard.
+- No Render dashboard credentials or private environment values were available in this audit. No secrets were requested or exposed, no Render environment values were changed, no deploy was triggered, and all publishing/DM automation remains in development-safe OFF posture.
+- Next required live verification: inspect the Render service's latest deploy event and logs; confirm its deployed commit, health-check path, runtime/build/start commands, and attached PostgreSQL database; then re-fetch both endpoints. Resolve any actual database error only after identifying the exact missing table and confirming the intended database.
