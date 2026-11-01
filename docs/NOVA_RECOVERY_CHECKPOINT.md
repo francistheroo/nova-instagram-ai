@@ -201,3 +201,62 @@ The user supplied this status response from the NOVA service:
 4. Verify the Render database schema and remove the recorded token-refresh `UndefinedTable` error; then re-fetch live `/health` and `/integrations/status` without exposing secrets.
 5. Verify Canva OAuth with a real authorized account only when explicitly approved. Keep direct-publish routes disabled; use draft → inspect → Meta `FINISHED` → explicit approval/publish.
 6. Do not deploy, enable live publishing/DM automation, change Meta settings, or publish content without explicit user authorization.
+
+
+---
+
+## Part 3 deployment and environment audit — 2026-11-01 (expanded)
+
+### Repository state and verification correction
+- Audit base: `main` at `2270b2cecaa0ce89431652bfa2d4f114dab5dfa7`.
+- The earlier note above saying a post-merge `main` workflow was not verified is superseded: GitHub Actions run #333 (run ID `41295206264`) ran on descendant commit `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`, which includes the PR #124 merge. The run completed successfully; its test job passed with **503 passed, 6 skipped, 40 warnings, 0 failures**. It was not a workflow triggered directly on the PR #124 merge SHA.
+- `requirements.txt` declares FastAPI, Uvicorn, HTTPX, python-dotenv, cryptography, psycopg[binary], and pytest. A root `render.yaml` and root `Dockerfile` were not found during this audit; verify the Render service's build/start commands in its private dashboard rather than assuming a Blueprint or Docker deployment.
+- Live `/health` and `/integrations/status` could not be retrieved in this audit session. The previous user-supplied `status=ok` payload and `UndefinedTable` refresh error remain historical evidence only, not a current live health check. Current Render deploy commit, environment values, database binding, and service plan are not independently visible from GitHub.
+
+### Environment variable inventory (names only; never store values here)
+**Core service and security**
+- `DATABASE_URL`: PostgreSQL connection string; required for durable OAuth/token, Canva, DM-memory, admin, and scheduler state.
+- `NOVA_API_KEY`: protects action/API-key routes.
+- `NOVA_ADMIN_USERNAME`, `NOVA_ADMIN_PASSWORD`: admin login for `/app` and `/admin`.
+- `OAUTH_STATE_SECRET`: random state-signing secret (README specifies at least 32 characters).
+- `TOKEN_ENCRYPTION_KEY`: Fernet key used to encrypt stored OAuth token bundles.
+- Run `python -m app.init_oauth_db` against the intended Render PostgreSQL database before OAuth/Canva/DM-memory/scheduler operations. Confirm the database target and backup/restore plan before running schema initialization.
+
+**Instagram / Meta**
+- OAuth path: `INSTAGRAM_OAUTH_CLIENT_ID`, `INSTAGRAM_OAUTH_CLIENT_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_OAUTH_SCOPES`.
+- API configuration/manual-token path: `META_GRAPH_BASE_URL`, `META_API_VERSION`, `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID`. Use the current supported API version and credentials appropriate to the configured login flow; do not assume sample values or an old token are valid.
+- Webhooks: `META_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`; the HTTPS callback and required event fields must also be configured in Meta's dashboard.
+- Safety flags: `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false` during development.
+
+**Canva**
+- `CANVA_CLIENT_ID`, `CANVA_CLIENT_SECRET`, `CANVA_REDIRECT_URI`, `CANVA_OAUTH_SCOPES`.
+- Optional account-selection setting: `CANVA_ACCOUNT_KEY` (needed when a stable account key is absent from the token response or multiple accounts are stored).
+- Register the exact HTTPS callback URI in the Canva developer app. OAuth tokens require the shared PostgreSQL store and encryption settings above.
+
+**AI and image providers**
+- Text provider: `AI_PROVIDER_ORDER` plus the credentials/model pair for at least one selected provider: `GEMINI_API_KEY`/`GEMINI_MODEL`, `GROQ_API_KEY`/`GROQ_MODEL`, optional `HF_TOKEN`/`HF_CHAT_MODEL`, or legacy `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`.
+- Image generation is separate and optional for draft-only usage: `IMAGE_API_BASE_URL`, `IMAGE_API_KEY`, `IMAGE_MODEL`. Scheduled image publishing requires a compatible provider that returns publicly reachable HTTPS media URLs and suitable persistent media hosting where temporary URLs are insufficient.
+
+**Scheduler and timezone**
+- `NOVA_SCHEDULER_ENABLED=false` and `NOVA_TIMEZONE=Asia/Kolkata` are the development-safe settings.
+- The scheduler also needs `DATABASE_URL`, a configured text provider, a working image provider/public media URL, an authorized professional Instagram account, the relevant approved permissions, and an always-on service or external scheduler. Render free instances may sleep and cannot guarantee exact-time execution.
+- `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED` is documented in README as an opt-in setting but is absent from `.env.example`; decide and document an explicit safe default before enabling it. `CANVA_ACCOUNT_KEY` is also an optional README-documented variable absent from the sample.
+- `.env.example` and README describe different default `AI_PROVIDER_ORDER` values; reconcile documentation before treating either as the authoritative runtime default.
+- Do not infer which variables are currently set in Render from `.env.example`. The actual private environment has not been inspected.
+
+### Deployment readiness checklist
+1. Confirm the Render service's build command, start command, Python runtime, health-check path, and current deployed commit in the Render dashboard.
+2. Attach the intended persistent PostgreSQL database; verify connectivity without printing the connection string.
+3. Set required secrets only in Render's private environment settings. Never commit them or paste them into chat.
+4. Run the existing `python -m app.init_oauth_db` initialization against the confirmed database, then inspect logs/status for schema errors including the historical `UndefinedTable`.
+5. Register exact HTTPS redirect/callback URLs and approved scopes in the Meta and Canva developer dashboards.
+6. Verify read-only Instagram account access and Canva OAuth separately before considering write actions.
+7. Keep all automation, scheduler, DM auto-reply, admin master, and direct-publish controls OFF until each dependency is verified and the user explicitly authorizes live operation.
+8. Re-fetch `/health` and `/integrations/status` after deployment. Treat them as configuration/implementation diagnostics, not proof of provider permissions or successful publishing.
+
+### Outstanding blockers / engineering follow-up
+- Fix the scheduler daily-cap mismatch (admin accepts up to 50; scheduler accepts only 0–20).
+- Validate `NOVA_TIMEZONE` at startup and expose scheduler readiness/error rather than silently suppressing invalid-zone failures.
+- Add/document `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED` with a safe default and reconcile the README/`.env.example` provider-order default.
+- Identify and resolve the exact PostgreSQL table behind the previously reported token-refresh `UndefinedTable` before declaring refresh healthy.
+- Live Render health, current deployment commit, current environment values, live Canva OAuth, and live Meta connection remain unverified. No deployment, environment mutation, live publish, or DM send was performed for this audit.
