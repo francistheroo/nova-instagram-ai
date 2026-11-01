@@ -36,11 +36,11 @@ Tasks:
 - Run relevant tests and verify GitHub CI.
 - Record PR/commit/test/CI evidence and update the recovery checkpoint.
 
-**Current status:** COMPLETE — latest repository inventory checked for this coordination cycle; no open PRs. Current-main CI is not independently verified.
+**Current status:** IN PROGRESS — latest inventory found one open PR (#127); current-main CI is not independently verified.
 
 **Latest update / handoff — 2026-11-01:**
 - Latest `main` inspected at `9b8c331eb80a04a577d0fe5ed75f3d20999364ca` (commit: `Document live-action gates in NOVA security checkpoint`). Latest commit changes only `docs/security-audit-checkpoint-2026-11-01.md`.
-- Open PR search returned **zero open PRs**. PRs #122–#126 and #113 are closed/merged as recorded in the repository checkpoints. No PR was merged, closed, or otherwise changed by Part 1 in this coordination cycle.
+- Open PR search initially returned zero; a subsequent fresh search found one open PR: [#127](https://github.com/francistheroo/nova-instagram-ai/pull/127), a Part 3 documentation-only Render verification follow-up. It targets main, is currently reported `mergeable=false`, and its branch base predates Part 1's latest main checkpoint commit. PRs #122–#126 and #113 are closed/merged. Part 1 did not merge or close any PR.
 - Latest verified application-code CI remains PR #126 head run [#41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475): **507 passed, 6 skipped, 40 warnings, 0 failed**. PR #126 merge commit is `d2e445be791ba36170946c2fc5d1f66bdfaad3f1`. A separate CI run on the current main head/merge commit was not returned by the available commit-run lookup; combined commit status for current main returned no status entries. Therefore current-main CI is **NOT VERIFIED**, not PASS. The earlier main run #41295206264 (503 passed, 6 skipped) is historical evidence on ancestor `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`, not the current main head.
 - No failing tests or merge conflicts are currently reported for open PRs because there are no open PRs. Part 1 made no application-code changes.
 - Branch hygiene: `fix/validate-scheduler-settings-current-main` is 34 commits behind main with no unique commits; `security/audit-scheduler-duplicate-safety` is diverged (5 ahead, 12 behind) and modifies `app/admin.py` plus scheduler tests. Do not merge either branch without a fresh focused review/rebase. The former rebased scheduler branch is stale; duplicate test definitions observed there are not in main.
@@ -85,6 +85,17 @@ Tasks:
 ## Shared handoff log
 
 Add new entries at the top. Use this format:
+
+### 2026-11-01 — Part 1 — main/PR/CI audit and cross-part handoff
+
+- **Status:** VERIFIED for repository inventory and prior PR-head CI; current-main CI NOT VERIFIED.
+- **Branch / PR:** `main`; one open PR [#127](https://github.com/francistheroo/nova-instagram-ai/pull/127), Part 3 docs-only Render follow-up, currently reported `mergeable=false`.
+- **Commit SHA:** inspected main `9b8c331eb80a04a577d0fe5ed75f3d20999364ca`; Part 1 coordination commit `0f69c8b1bf1a603d6160e0a3883e874ec87138ef`; Part 1 recovery-checkpoint commit `c552bd561a86f8078809c1fa48e01139b3776a51`.
+- **Changes made:** Updated only Part 1's section in this hub and appended the Part 1 audit to `docs/NOVA_RECOVERY_CHECKPOINT.md`; no application code changed.
+- **Tests run and results:** No new local tests run; latest verified PR #126 head CI remains 507 passed, 6 skipped, 40 warnings, 0 failed.
+- **CI evidence:** [PR #126 run #41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475). Current main combined status had no entries and the commit-workflow lookup returned no runs; do not call current main CI passed.
+- **Risks or blockers:** PR #127 is reported not mergeable and must be synchronized with current main. Timezone startup validation gap remains per its diff. Current main has no open code PRs other than this documentation follow-up. Live integrations are not verified.
+- **Next part / requested action:** Part 2: review the diverged scheduler/security branch before reuse. Part 3: sync PR #127, correct its base conflict without dropping Part 1 checkpoint content, and handle timezone validation in a separate focused code/test PR. Both parts must update their own sections here before claiming completion.
 
 ### YYYY-MM-DD HH:MM IST — Part N — short subject
 
