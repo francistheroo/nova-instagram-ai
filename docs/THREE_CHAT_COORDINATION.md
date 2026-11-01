@@ -36,6 +36,8 @@ Tasks:
 - Run relevant tests and verify GitHub CI.
 - Record PR/commit/test/CI evidence and update the recovery checkpoint.
 
+**Production-readiness cycle update — 2026-11-01:** PR #128 is merged as c18af6a32870ad40ceb6735b5c8a368bd7861c9f; final-main CI run #41297515819 passed (507 passed, 6 skipped, 40 warnings, 0 failed). Only open PR before this documentation PR was #129, a backup branch 4 ahead / 66 behind main with no CI; do not merge it. Part 1 review is complete for this pass, but the overall cycle remains open pending Parts 2 and 3.
+
 **Current status:** COMPLETE — Part 1 audit and handoffs recorded. One open Part 3 documentation PR (#128) remains under Part 3 ownership; current-main CI is not independently verified.
 
 **Latest update / handoff — 2026-11-01:**
