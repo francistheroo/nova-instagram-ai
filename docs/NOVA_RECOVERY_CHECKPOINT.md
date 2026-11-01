@@ -107,3 +107,49 @@ The user often says “Next” or “Fast” to request another incremental step
 4. Keep draft creation separate from publication. Do not call live publish endpoints during tests.
 5. Do not deploy, enable live auto-replies, change Meta settings, or publish Instagram content without explicit user authorization.
 6. Treat this checkpoint as repository progress/configuration notes, not proof of live production integration.
+
+
+---
+
+## Latest NOVA integration diagnostic — 2026-11-01
+
+### Render service status reported by the deployed health/status endpoint
+
+The user supplied this status response from the NOVA service:
+
+- Service status: `ok`
+- Service name: `NOVA Instagram AI`
+- `instagram_configured=false`
+- `instagram_manual_credentials_present=false`
+- `instagram_live_connection_verified=false`
+- `instagram_oauth_implemented=true`
+- `instagram_token_refresh_implemented=true`
+- `instagram_manual_token_refresh_implemented=true`
+- `instagram_automatic_token_refresh_implemented=true`
+- `instagram_automatic_token_refresh_enabled=true`
+- `instagram_automatic_token_refresh_running=true`
+- `instagram_automatic_token_refresh_error="UndefinedTable"`
+
+### Interpretation
+
+- The web service reports healthy, and OAuth/token-refresh code paths are present.
+- Instagram is **not configured** and no real Instagram connection has been verified.
+- Automatic token refresh is reported as enabled/running, but its latest reported error is `UndefinedTable`. This indicates a database table expected by the refresh process is missing in the connected database, or the deployed schema is not up to date.
+- Do not treat the refresh worker's `running=true` flag as proof that refresh is functioning correctly.
+- Do not claim Instagram OAuth, token persistence, or live publishing has been tested successfully.
+
+### Next steps
+
+1. Inspect the deployed migration/schema history and identify the exact table referenced by the token-refresh error. Do not guess a table name from this checkpoint.
+2. Confirm the Render service is connected to the intended PostgreSQL database without exposing the database URL or credentials.
+3. Apply the repository's existing migration/init procedure for the missing table; avoid creating a duplicate or ad-hoc schema.
+4. Check service logs and the status endpoint again. The refresh error should be absent before considering token refresh healthy.
+5. Configure the Meta OAuth credentials privately in Render and verify the exact redirect URI in the Meta developer dashboard.
+6. Complete OAuth with an eligible Instagram professional account, then confirm the admin-only status endpoint reports the expected connected account without exposing tokens.
+7. Keep live publishing and auto-replies disabled until the account connection and each intended action are separately verified and explicitly authorized.
+
+### Security reminders
+
+- Never commit `DATABASE_URL`, Meta client secrets, OAuth state secrets, token-encryption keys, access tokens, or admin passwords.
+- Do not paste secret values into chat or checkpoint files.
+- Mocked GitHub tests and a healthy HTTP status do not prove a live Instagram connection.
