@@ -54,6 +54,29 @@ def initialize_scheduler_schema():
         """)
 
 
+def _mark_stale_processing_uncertain(stale_after_minutes: int = 120) -> int:
+    """Move abandoned processing runs to uncertain; never retry a possible publish.
+
+    A worker can crash after Meta accepts a publish but before NOVA records the
+    media ID. Reclaiming the slot as failed could create a duplicate post.
+    """
+    if isinstance(stale_after_minutes, bool) or not isinstance(stale_after_minutes, int):
+        raise ValueError("stale_after_minutes must be an integer")
+    if not 15 <= stale_after_minutes <= 10080:
+        raise ValueError("stale_after_minutes must be between 15 and 10080")
+    with psycopg.connect(_db_url(), connect_timeout=10) as conn:
+        rows = conn.execute(
+            """UPDATE nova_auto_publish_runs
+               SET status='uncertain',
+                   error_code='worker_interrupted_outcome_unknown',
+                   updated_at=NOW()
+               WHERE status='processing'
+                 AND updated_at < NOW() - (%s * INTERVAL '1 minute')
+               RETURNING id""",
+            (stale_after_minutes,),
+        ).fetchall()
+    return len(rows)
+
 def _settings():
     with psycopg.connect(_db_url(), connect_timeout=10) as conn:
         rows = conn.execute("SELECT setting_key, setting_value FROM nova_admin_settings").fetchall()
@@ -189,6 +212,8 @@ async def scheduler_loop(meta_request, instagram_config, stop_event: asyncio.Eve
                 and os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true"
             )
             if enabled and _db_url():
+                # Interrupted publishes are ambiguous: mark uncertain, never retry.
+                await asyncio.to_thread(_mark_stale_processing_uncertain)
                 settings = await asyncio.to_thread(_settings)
                 if master_enabled() and settings.get("direct_publish_enabled") is True:
                     zone = ZoneInfo(os.getenv("NOVA_TIMEZONE", "Asia/Kolkata"))
