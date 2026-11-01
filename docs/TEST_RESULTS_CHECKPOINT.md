@@ -118,8 +118,8 @@ No failing tests were found in the verified main-descendant, PR #125, or latest 
 - Earlier CI rows in this file are historical PR-head/ancestor evidence only and do not prove PR #130 or current main status.
 
 
-## Part 1 — PR #131 synchronization v2 — 2026-11-01
+## Part 1 — PR #131 synchronization v3 — 2026-11-01
 
-- PR #134 became conflicted again after `main` advanced; this branch reapplies only the Part 1 documentation notes on the latest main snapshot `67de19ef25aaada3e0bb133fd0a2bb187e38e237`.
-- No application code or tests were changed in this documentation-only synchronization.
-- Prior CI runs on ancestor commits do not certify this branch or current main; check the workflow for this exact head.
+- PR #134 and the first resynchronization attempt became stale as `main` advanced. This retry is based on the latest observed main snapshot `f25e908bba47ad23f297f8642b0f273b826d2ebe`.
+- This is a documentation-only synchronization; no application code or tests changed.
+- Prior CI runs on ancestor commits do not certify this branch or current main. Verify CI for this exact head.
