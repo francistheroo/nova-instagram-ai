@@ -4,24 +4,37 @@ import hmac
 import os
 
 import psycopg
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Request
+
+from app.session_auth import COOKIE_NAME, session_username
 
 
-def require_user(authorization: str | None = Header(default=None)):
+def require_user(request: Request, authorization: str | None = Header(default=None)):
     expected_user = os.getenv("NOVA_ADMIN_USERNAME", "").strip()
     expected_password = os.getenv("NOVA_ADMIN_PASSWORD", "")
     if not expected_user or not expected_password:
         raise HTTPException(status_code=503, detail="Admin login is not configured on the server.")
+
+    # Browser sessions are revocable server-side. If a cookie is present but
+    # invalid/expired, do not silently fall back to cached Basic credentials.
+    session_token = request.cookies.get(COOKIE_NAME)
+    if session_token:
+        username = session_username(session_token)
+        if username and hmac.compare_digest(username, expected_user):
+            return True
+        raise HTTPException(status_code=401, detail="Your NOVA session has expired. Please sign in again.")
+
+    # Retain Basic auth for existing machine/API clients during migration.
     try:
         scheme, encoded = (authorization or "").split(" ", 1)
         username, password = base64.b64decode(encoded, validate=True).decode("utf-8").split(":", 1)
     except Exception:
-        raise HTTPException(status_code=401, detail="Admin sign-in required.", headers={"WWW-Authenticate": 'Basic realm="NOVA"'}) from None
+        raise HTTPException(status_code=401, detail="Admin sign-in required.") from None
     if scheme.lower() != "basic" or not (
         hmac.compare_digest(username, expected_user)
         and hmac.compare_digest(password, expected_password)
     ):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials.", headers={"WWW-Authenticate": 'Basic realm="NOVA"'})
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.")
     return True
 
 

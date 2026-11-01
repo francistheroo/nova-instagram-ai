@@ -8,8 +8,9 @@ def test_normal_app_requires_password(monkeypatch):
     monkeypatch.setenv("NOVA_ADMIN_USERNAME", "nova-admin")
     monkeypatch.setenv("NOVA_ADMIN_PASSWORD", "test-only-password")
     response = TestClient(app).get("/app")
-    assert response.status_code == 401
-    assert "WWW-Authenticate" in response.headers
+    assert response.status_code == 200
+    assert 'id="loginForm"' in response.text
+    assert 'id="signOutButton"' in response.text
 
 
 def test_normal_app_accepts_configured_account(monkeypatch):

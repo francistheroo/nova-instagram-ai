@@ -10,7 +10,6 @@ def test_admin_dashboard_requires_admin_login(monkeypatch):
     response = TestClient(app).get("/admin")
 
     assert response.status_code == 401
-    assert "WWW-Authenticate" in response.headers
 
 
 def test_admin_dashboard_accepts_admin_login(monkeypatch):
