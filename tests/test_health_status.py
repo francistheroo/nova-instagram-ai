@@ -36,7 +36,10 @@ def test_health_distinguishes_implementation_from_live_configuration(monkeypatch
     assert payload["instagram_oauth_implemented"] is True
     assert payload["instagram_token_refresh_implemented"] is True
     assert payload["instagram_manual_token_refresh_implemented"] is True
-    assert payload["instagram_automatic_token_refresh_implemented"] is False
+    assert payload["instagram_automatic_token_refresh_implemented"] is True
+    assert payload["instagram_automatic_token_refresh_enabled"] is False
+    assert payload["instagram_automatic_token_refresh_running"] is False
+    assert payload["instagram_automatic_token_refresh_error"] is None
 
     assert payload["instagram_webhooks_implemented"] is True
     assert payload["instagram_webhook_receiver_implemented"] is True
