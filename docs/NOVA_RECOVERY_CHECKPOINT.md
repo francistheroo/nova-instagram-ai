@@ -65,3 +65,45 @@ Updated: 2026-10-29 (verified against GitHub)
 
 ## Workflow
 The user often says “Next” or “Fast” to request another incremental step. Make real repository progress, group related changes into one PR, and report exact verified status. Recheck GitHub before relying on this checkpoint in a future chat.
+
+---
+
+## Latest verified checkpoint — 2026-11-01
+
+### CI and PR #121 — merged
+- PR: https://github.com/francistheroo/nova-instagram-ai/pull/121
+- Title: **Add Canva photo draft review and explicit publish gate**
+- Branch: `feature/canva-photo-review-gate`
+- Head commit: `4cc01b076c020eac3c70fbbd5dcc142df0c5355c`
+- PR state: **closed and merged** on 2026-11-01 at 09:17:13 UTC.
+- Merge commit: `c1db27536ff3dd6df9d1c0ac16959e9064cc9e8b`
+- Changes: 2 files, 261 additions, 0 deletions.
+- GitHub Actions workflow: **NOVA tests**
+- Workflow run #318 (run ID `41292245052`): **completed successfully**; conclusion `success`.
+- Run URL: https://github.com/francistheroo/nova-instagram-ai/actions/runs/41292245052
+
+### Canva photo draft workflow now in main
+- Authenticated user/admin access is required by the Canva review router.
+- Draft creation and publication require the NOVA API key and master switch.
+- Instagram actions also require `INSTAGRAM_AUTOMATION_ENABLED=true`.
+- Creating a Canva photo draft creates a Meta image container only; it does **not** publish.
+- Canva export must report `success` before a photo container can be created.
+- The status endpoint is read-only and reports whether Meta has returned `FINISHED`.
+- Publishing is a separate explicit POST action and is rejected unless Meta reports `FINISHED`.
+- Regression tests cover draft creation without publishing, unfinished Canva export rejection, status checking, unfinished Meta container rejection, and explicit publish after `FINISHED`.
+- The PR's tests used mocks. A green CI run does not prove that live Canva or Meta credentials, permissions, or production publishing work.
+
+### Current operating configuration checkpoint
+- `NOVA_SCHEDULER_ENABLED=true`
+- `INSTAGRAM_AUTOMATION_ENABLED=true`
+- `NOVA_TIMEZONE=Asia/Kolkata`
+- These are the user's intended environment values, not independently verified production environment values.
+- Keep secrets out of GitHub files and chat. Never store API keys, passwords, access tokens, or OAuth secrets in this checkpoint.
+
+### Resume instructions
+1. Start from the latest `main` branch; PR #121 is already merged.
+2. Check open PRs and latest GitHub Actions runs before starting another change.
+3. Verify exact head commit and workflow conclusion before reporting CI status.
+4. Keep draft creation separate from publication. Do not call live publish endpoints during tests.
+5. Do not deploy, enable live auto-replies, change Meta settings, or publish Instagram content without explicit user authorization.
+6. Treat this checkpoint as repository progress/configuration notes, not proof of live production integration.
