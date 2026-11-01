@@ -74,8 +74,8 @@ def read_settings():
 class SettingsUpdate(BaseModel):
     master_enabled: bool = False
     provider_order: list[str] = Field(min_length=1, max_length=4)
-    max_posts_per_day: int = Field(ge=0, le=50)
-    max_stories_per_day: int = Field(ge=0, le=50)
+    max_posts_per_day: int = Field(ge=0, le=20)
+    max_stories_per_day: int = Field(ge=0, le=20)
     direct_publish_enabled: bool
     post_times: list[str] = Field(default_factory=lambda: ["09:00"], max_length=10)
     story_times: list[str] = Field(default_factory=lambda: ["13:00"], max_length=10)
@@ -89,7 +89,7 @@ body{margin:0;background:#050505;color:#eee;font:15px system-ui}main{max-width:7
 </style></head><body><main><h1>NOVA Admin</h1><p class="hint">Server-side settings. API keys remain in Render and are never displayed.</p>
 <div class="card"><h2>Master switch</h2><label><input id="master" type="checkbox"> NOVA AI ON — allow AI features and scheduled publishing</label><p class="hint">OFF disables AI generation and scheduled publishing immediately. Admin settings remain accessible.</p></div>
 <div class="card"><h2>AI provider fallback order</h2><label for="providers">Provider order</label><input id="providers" placeholder="gemini,groq,huggingface,legacy"><p class="hint">Supported: gemini, groq, huggingface, legacy</p></div>
-<div class="card"><h2>Daily publishing limits</h2><label for="posts">AI photo posts per day</label><input id="posts" type="number" min="0" max="50"><label for="stories">Stories per day</label><input id="stories" type="number" min="0" max="50"></div>
+<div class="card"><h2>Daily publishing limits</h2><label for="posts">AI photo posts per day</label><input id="posts" type="number" min="0" max="20"><label for="stories">Stories per day</label><input id="stories" type="number" min="0" max="20"></div>
 <div class="card"><h2>Automatic schedule</h2><label for="posttimes">Photo post times (24-hour, comma-separated)</label><input id="posttimes" placeholder="09:00,18:00"><label for="storytimes">Story times (24-hour, comma-separated)</label><input id="storytimes" placeholder="13:00"><p class="hint">Times use NOVA_TIMEZONE; default Asia/Kolkata.</p></div>
 <div class="card"><h2>Direct publishing</h2><label><input id="direct" type="checkbox"> Enable direct publishing without per-post approval</label><p class="hint">Once enabled and configured, NOVA creates and publishes at the schedule times without a per-post button. Requires NOVA_SCHEDULER_ENABLED and INSTAGRAM_AUTOMATION_ENABLED on the server.</p></div>
 <button id="save">Save settings</button><p id="status" role="status"></p></main>
