@@ -172,3 +172,12 @@ Add new entries at the top. Use this format:
 - [ ] Live messaging and publishing remain disabled during development.
 - [ ] Master recovery checkpoint reflects verified results and outstanding work.
 - [ ] All three parts have posted a final handoff in this file.
+
+
+### 2026-11-01 — Part 1 — PR #131 conflict recovery
+
+- **Status:** IN PROGRESS — original docs PR #131 conflicted after main advanced; Part 1 documentation is reapplied on a fresh branch.
+- **Original PR:** [#131](https://github.com/francistheroo/nova-instagram-ai/pull/131), head `7954b4705334b9dddbba3a0625657e947722f04a`; compare showed 4 ahead / 4 behind, merge base `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`.
+- **Recovery branch:** `part1/pr131-conflict-fix`, created from main at `ffae679576245b15eb273053abe9632bc673217d`. Documentation-only; no app code or live settings changed.
+- **CI:** previous verified run [#41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819) passed 507/6 skipped/40 warnings/0 failed on ancestor `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; it does not verify later main.
+- Overall cycle remains incomplete pending Parts 2 and 3.
