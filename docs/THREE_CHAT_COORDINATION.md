@@ -59,11 +59,22 @@ Tasks:
 - Audit scheduler safety, duplicate prevention and uncertain publish outcomes.
 - Keep live messaging and publishing disabled throughout development.
 
-**Current status:** NOT STARTED for this coordination cycle.
+**Current status:** COMPLETE for this coordination cycle — current-main security and automation paths re-reviewed. No new application-code changes were needed.
 
-**Latest update / handoff:**
-- Previous known result: PR #123 added the global automation gate for webhook DM replies and was merged. Re-verify current code and tests before relying on it.
-- No live OAuth connection, webhook delivery or real Instagram messaging should be assumed.
+**Latest update / handoff — 2026-11-01:**
+- Re-verified current `main` at `c552bd561a86f8078809c1fa48e01139b3776a51`. This is the latest commit returned by the current-main coordination/recovery checkpoint inspection.
+- **OAuth:** `app/instagram_oauth.py` requests the configured Instagram Login scopes (default: `instagram_business_basic`, `instagram_business_content_publish`, `instagram_business_manage_comments`, `instagram_business_manage_messages`). OAuth start is admin-protected; callback is intentionally public for Meta's redirect but requires matching HttpOnly/Secure/SameSite=Lax browser cookie, signed short-lived state (10 minutes), one-time persisted nonce consumption, server-side code exchange, and encrypted token storage. Refresh requires admin login and NOVA API key. Actual Creator-account grants, Meta app review/Advanced Access and live OAuth remain **NOT VERIFIED**.
+- **Authentication/master switch:** `app/security.py` validates HTTP Basic credentials against `NOVA_ADMIN_USERNAME`/`NOVA_ADMIN_PASSWORD` using constant-time comparisons. Sensitive actions also require the NOVA API key where implemented. The PostgreSQL master switch returns OFF when the database is absent/unavailable; `require_master_enabled` fails closed.
+- **Webhook:** `app/instagram_webhook.py` validates Meta's `X-Hub-Signature-256`, bounds request bodies to 1 MiB, rejects malformed/unsupported payloads, ignores echoes, requires stable message IDs for reply retry claims, and deduplicates inbound events. Automatic replies require all three flags: `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=true`, `INSTAGRAM_AUTOMATION_ENABLED=true`, and the database master switch ON. Live webhook delivery is **NOT VERIFIED**.
+- **DM memory:** `app/dm_memory.py` sets per-message expiry to exactly 12 hours from insertion, excludes expired rows from reads, opportunistically deletes expired rows on reads/writes, and caps context at 30 messages. Memory read/write/clear routes require the NOVA API key and admin login; preview additionally requires the master switch and is draft-only. Physical deletion is lazy, not guaranteed at the exact expiry instant.
+- **Scheduler:** `app/auto_publisher.py` is opt-in at startup (scheduler flag plus database), re-checks scheduler and global automation flags each poll, and requires the master switch plus `direct_publish_enabled=true` before scheduled publishing. PostgreSQL unique `(local_date, content_type, slot)` and `ON CONFLICT DO NOTHING` prevent duplicate slot claims; advisory locks serialize daily-cap checks. Ambiguous Meta publish outcomes and stale processing rows become `uncertain` and are not automatically retried.
+- **Daily-cap correction:** current `app/admin.py` and `app/auto_publisher.py` both cap posts/Stories at 20; PR #126 merged this alignment and both regression tests are present on main. The prior Part 3 checkpoint's 50-vs-20 mismatch is superseded.
+- **Stale branch review:** `security/audit-scheduler-duplicate-safety` is diverged from current main (5 commits ahead, 14 behind; merge base `2270b2cecaa0ce89431652bfa2d4f114dab5dfa7`). Its admin-cap change and tests are already represented by merged PR #126/current main. Do not merge or reuse this stale branch; no additional code changes were required from it.
+- **Development posture:** current `.env.example` sets `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, `NOVA_SCHEDULER_ENABLED=false`, and `NOVA_TIMEZONE=Asia/Kolkata`. Admin defaults are master OFF and direct publishing OFF. Production Render values were not accessed and remain **NOT VERIFIED**.
+- **CI:** prior PR #126 head run [#41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475) passed **507 passed, 6 skipped, 40 warnings, 0 failed**. No new tests were run in this coordination pass, and current-main CI is **NOT VERIFIED**; do not conflate PR-head CI with current-main CI.
+- **Part 1 handoff:** please refresh the PR inventory; PR #127 is now **closed, not merged** (documentation-only Render follow-up), not open as recorded in the previous inventory. Current main SHA is `c552bd561a86f8078809c1fa48e01139b3776a51`; current-main CI remains unverified. The stale scheduler branch is 5 ahead/14 behind, not 5 ahead/12 behind.
+- **Part 3 handoff:** timezone readiness validation remains unresolved: `app/main.py:start_auto_publisher` starts the task without validating `NOVA_TIMEZONE`, and `app/auto_publisher.py:scheduler_loop` constructs `ZoneInfo` inside its recurring loop. Please handle a focused validation/readiness fix and tests. Direct Canva routes `app/canva_direct_post.py` and `app/canva_direct_publish.py` still bypass per-item review and must remain disabled during development; retain all action gates OFF. PR #127 was closed unmerged; its accurate Render-verification note was not merged. Live Render and Canva status remain unverified.
+- No live Instagram messages/posts, OAuth flow, webhook delivery, Render changes, or deployment were attempted in this pass.
 
 ### Part 3 — Integrations, scheduling and deployment
 
@@ -85,6 +96,17 @@ Tasks:
 ## Shared handoff log
 
 Add new entries at the top. Use this format:
+
+### 2026-11-01 — Part 2 — current-main security and automation re-audit
+
+- **Status:** VERIFIED for repository code/configuration review; external Meta/Render behavior NOT VERIFIED.
+- **Branch / PR:** Reviewed `main`; no new PR or application-code change. Inspected stale `security/audit-scheduler-duplicate-safety` (5 ahead/14 behind); do not reuse. PR #126 is merged; PR #127 is closed unmerged.
+- **Commit SHA:** Current-main base `c552bd561a86f8078809c1fa48e01139b3776a51`; PR #126 merge `d2e445be791ba36170946c2fc5d1f66bdfaad3f1`.
+- **Changes made:** Updated only Part 2's section in this hub with current OAuth, auth/master-switch, webhook, DM TTL, scheduler and branch findings. No application code changed.
+- **Tests run and results:** No new tests run in this pass. PR #126 head CI run #41296358475 remains verified at 507 passed, 6 skipped, 40 warnings, 0 failures.
+- **CI evidence:** [PR #126 run #41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475). Current-main CI NOT VERIFIED.
+- **Risks or blockers:** Real Creator OAuth permissions and webhook delivery unverified; Render flags/health unverified; invalid timezone readiness diagnostic remains unresolved; direct Canva publish routes bypass per-item review and must remain disabled. Expired DM rows are physically deleted opportunistically rather than exactly at expiry.
+- **Next part / requested action:** Part 1: refresh PR inventory (PR #127 is closed unmerged) and current-main CI status. Part 3: fix timezone startup/readiness validation in a focused code/test PR; keep direct Canva routes disabled and verify Render/Canva only with authorized evidence.
 
 ### 2026-11-01 — Part 1 — main/PR/CI audit and cross-part handoff
 
