@@ -109,3 +109,14 @@ No live Canva/Meta publishing was performed; external calls in the regression te
 | Scheduler validation branch hygiene | REVIEW NOTE | The unassociated branch `fix/validate-scheduler-settings-rebased` is 2 commits ahead of main and its `tests/test_auto_publisher.py` contains duplicate definitions of the same three test functions. No workflow run was returned for its head and no matching open PR was found. The duplicate definitions are not present on main; main already contains the scheduler validation implementation/tests from merged PR #113. This stale branch was not merged or modified. The older `fix/validate-scheduler-settings` branch is diverged (3 ahead, 40 behind) and is not suitable for merging as-is. |
 
 No failing tests were found in the verified main-descendant, PR #125, or latest PR #126 CI runs. The 40 warnings are non-fatal deprecation warnings. Both PRs encountered during the audit are now merged; the final open-PR search returned none. No deployment, live Instagram message, or publishing action was performed. Live Render configuration, live Canva/Meta authorization, and production behavior remain unverified.
+
+## Production-readiness hardening — Part 1 — 2026-11-01
+
+| Check | Status | Evidence |
+|---|---|---|
+| PR #128 synchronization/review | PASS | PR #128 was rebased conflict-free onto base 945e221a57e2e36e29d6aa1ca23208082686f856, head 7ac3aee40ba4de7f852ae2643a7d38db4a9a49b6, and merged as c18af6a32870ad40ceb6735b5c8a368bd7861c9f. [PR #128](https://github.com/francistheroo/nova-instagram-ai/pull/128). |
+| Final main CI | PASS | [Run #41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819) on exact main SHA c18af6a32870ad40ceb6735b5c8a368bd7861c9f: **507 passed, 6 skipped, 40 warnings, 0 failed**. |
+| Open PR review | REVIEW NOTE | Only open PR #129; backup branch head d551cf6c11f733f954cebbbd7c3ee38374328e14, 4 ahead / 66 behind main, no CI run. Do not merge stale backup; owner may close PR while retaining branch. |
+| Application code / live actions | NOT CHANGED | Part 1 performed repository/PR/CI review and checkpoint documentation only. No Instagram messages/posts or deployment actions. |
+
+Parts 2 and 3 evidence and final integration remain pending. External Render, Meta OAuth, Canva and live Instagram behavior are not verified by this CI run.
