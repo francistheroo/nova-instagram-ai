@@ -340,6 +340,20 @@ The user supplied this status response from the NOVA service:
 
 ---
 
+## Part 3 production-readiness scheduler timezone and Render review — 2026-11-01
+
+- PR #132 `fix/scheduler-timezone-readiness` adds `scheduler_timezone()`, validating `NOVA_TIMEZONE` during startup before database schema initialization and task creation. Unset uses `Asia/Kolkata`; explicitly blank/invalid names yield safe `invalid_timezone` and do not start the scheduler. The validated zone is passed into `scheduler_loop`, no longer constructed inside its recurring exception handler.
+- Adds `GET /ready`: when scheduler is enabled it requires successful startup and a running task, otherwise returns HTTP 503 with a safe error code; when intentionally disabled it returns 200. `/health` remains a liveness/status endpoint. `/ready` is a scheduler-startup signal, not live Meta/Canva verification or a continuous PostgreSQL probe.
+- Regression tests cover valid/default/invalid IANA zones, blank/malformed values, startup fail-closed behavior, no schema initialization on invalid timezone, scheduler-loop validation, and readiness behavior.
+- PR #132 CI [#41298730013](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298730013), head `90b3e289835c323bdabef66beb228c28e17081a8`: **515 passed, 6 skipped, 40 warnings, 0 failed**. Initial run #41298457328 had one test-fixture failure; the schema initializer import was restored locally and rerun #41298559107 passed.
+- Render source review: root repository has no `render.yaml` or `Dockerfile`; `requirements.txt` is present. Suggested Python build/start commands are `pip install -r requirements.txt` and `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, but actual Render Dashboard settings are unavailable and **NOT VERIFIED**.
+- Render official HTTP health checks use GET and accept any 2xx/3xx response within five seconds; other status codes/timeouts fail. HTTP checks apply to web services; private services use TCP, and TCP is the default if no HTTP path is configured. See [Render health checks](https://render.com/docs/health-checks). Use `/ready` when an enabled scheduler must be ready before traffic; use `/health` for web-process liveness only.
+- No Render dashboard access, deploy event/logs, deployed commit, health-check path, database attachment, or private env values were available. Public `/health` and `/integrations/status` remain inaccessible from the audit environment; this is not evidence that Render is down. No Render settings, secrets, schema, or deployment were changed.
+- Development switches remain OFF; no live Instagram, Meta, or Canva requests were made. Live external readiness remains **NOT VERIFIED**.
+
+
+---
+
 ## Part 2 production-readiness security hardening — 2026-11-01
 
 - Current main base reviewed: `c18af6a32870ad40ceb6735b5c8a368bd7861c9f` (includes merged PR #128 Render documentation follow-up).
