@@ -344,3 +344,61 @@ def test_canva_photo_publish_is_explicit_after_finished_status(monkeypatch):
     assert response.json()["published"] is True
     assert [call[1] for call in calls] == ["photo_container_123", "user_123/media_publish"]
     assert calls[-1][3] == {"creation_id": "photo_container_123"}
+
+
+
+def test_canva_photo_draft_respects_disabled_instagram_actions(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "false")
+    from app import canva_review
+
+    async def fail_if_called(*args, **kwargs):
+        raise AssertionError("Canva must not be called while Instagram actions are disabled")
+
+    monkeypatch.setattr(canva_review, "_canva_request", fail_if_called)
+    response = client.post(
+        "/canva/instagram-photo-drafts/png_job",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "No action"},
+    )
+    assert response.status_code == 403
+
+
+def test_canva_photo_draft_requires_https_export_url(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import canva_review
+
+    async def fake_canva(method, path, *, params=None, json_body=None):
+        return {"job": {"id": "png_job", "status": "success", "urls": ["http://example.test/photo.png"]}}
+
+    monkeypatch.setattr(canva_review, "_canva_request", fake_canva)
+    response = client.post(
+        "/canva/instagram-photo-drafts/png_job",
+        headers={"X-NOVA-API-Key": "test-secret"},
+        json={"caption": "Reject insecure URL"},
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Canva did not return a usable HTTPS export URL."
+
+
+def test_canva_photo_publish_does_not_call_publish_when_meta_status_is_not_finished(monkeypatch):
+    monkeypatch.setenv("NOVA_API_KEY", "test-secret")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "true")
+    from app import main
+
+    calls = []
+
+    async def fake_meta(method, path, *, params=None, data=None):
+        calls.append((method, path, params, data))
+        return {"id": "photo_container_123", "status_code": "ERROR"}
+
+    monkeypatch.setattr(main, "instagram_config", lambda: ("token", "user_123", "https://graph.instagram.com/v26.0"))
+    monkeypatch.setattr(main, "meta_request", fake_meta)
+    response = client.post(
+        "/canva/instagram-photo-drafts/photo_container_123/publish",
+        headers={"X-NOVA-API-Key": "test-secret"},
+    )
+    assert response.status_code == 409
+    assert len(calls) == 1
+    assert calls[0][0] == "GET"
