@@ -336,3 +336,11 @@ The user supplied this status response from the NOVA service:
 - Therefore the current Render deployment, deploy commit, service health, runtime logs, health-check configuration, attached database, and private environment settings remain **UNVERIFIED**. Endpoint retrieval failure is not proof that the service is down.
 - No Render settings, secrets, database schema, or deployment were changed. No Instagram messaging or publishing was performed. Keep live actions disabled during development.
 - To complete live verification, the owner must provide non-sensitive screenshots or copied text from the Render service's latest deploy event and logs, service settings (build/start/health-check configuration), and database attachment overview. Redact all environment values, connection strings, tokens, and credentials. Once those details are available, compare the deployed commit/configuration with the repository and retry the public endpoints.
+
+## Production-readiness hardening — Part 1 audit — 2026-11-01
+
+- Latest main SHA inspected: c18af6a32870ad40ceb6735b5c8a368bd7861c9f (merge of PR #128).
+- PR #128 is closed/merged; merge commit c18af6a32870ad40ceb6735b5c8a368bd7861c9f. Its rebased PR head was 7ac3aee40ba4de7f852ae2643a7d38db4a9a49b6, based on 945e221a57e2e36e29d6aa1ca23208082686f856.
+- Final main CI PASS: [run #41297515819](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41297515819), exact main SHA c18af6a32870ad40ceb6735b5c8a368bd7861c9f; **507 passed, 6 skipped, 40 warnings, 0 failed**.
+- Only open PR is #129, a backup of PR #113 work. Head d551cf6c11f733f954cebbbd7c3ee38374328e14, 4 ahead / 66 behind main, diverged; no CI run on this head. Its scheduler validation and stale-run recovery implementation are already present on main; the stale branch differs and should not be merged. Recommend owner-confirmed closure while retaining the branch if desired as backup.
+- No application code or live integrations changed by Part 1. Production-readiness work remains open pending Parts 2 and 3. Live Render/Meta/Canva behavior remains unverified; all live automation/publishing gates must stay OFF.
