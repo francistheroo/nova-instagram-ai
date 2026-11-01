@@ -123,3 +123,36 @@ No failing tests were found in the verified main-descendant, PR #125, or latest 
 - PR #134 and the first resynchronization attempt became stale as `main` advanced. This retry is based on the latest observed main snapshot `f25e908bba47ad23f297f8642b0f273b826d2ebe`.
 - This is a documentation-only synchronization; no application code or tests changed.
 - Prior CI runs on ancestor commits do not certify this branch or current main. Verify CI for this exact head.
+
+
+## Part 3 scheduler readiness and deployment review — 2026-11-01
+
+| Check | Status | Evidence |
+|---|---|---|
+| Scheduler timezone validation and readiness | PASS + MERGED | [PR #132](https://github.com/francistheroo/nova-instagram-ai/pull/132), merged as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`. Exact latest tested PR head `34edc8714dc31782cd415c498ffcb1a518502446`; [CI #41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975): **513 passed, 6 skipped, 40 warnings, 0 failed**. |
+| Latest main after scheduler merge | PASS | Main `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; [CI #41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332): **513 passed, 6 skipped, 40 warnings, 0 failed**. |
+| Part 3 documentation handoff before latest-main sync | PASS, prior head | [PR #135](https://github.com/francistheroo/nova-instagram-ai/pull/135), prior head `ee29644146c489e2684767e5aa07fa412257ce5b`; [CI #41299478560](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299478560): **505 passed, 6 skipped, 40 warnings, 0 failed**. This does not validate the synchronized head; new exact-head CI is required. |
+
+Part 3 documentation PR #135 synchronized head `47de3ffa814239468f38c101840280c547adf2d9`; [CI #41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) passed **513 passed, 6 skipped, 40 warnings, 0 failed**. PR is mergeable and open. Part 1 replacement branch v4 run [#41299562250](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299562250) passed **505 passed, 6 skipped, 40 warnings, 0 failed**, but it is 19 commits behind main with no unique files; PR #137 is closed unmerged and no Part 1 PR is open. Render dashboard/runtime configuration remains NOT VERIFIED. No Render deployment/configuration change, live Instagram action, or live Meta/Canva request was performed.
+
+
+## Part 1 final conflict recovery and current-main CI — 2026-11-01
+
+| Check | Status | Evidence |
+|---|---|---|
+| Part 1 documentation conflict recovery | PASS + MERGED | [PR #139](https://github.com/francistheroo/nova-instagram-ai/pull/139), merge commit `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; stale v2 note replaced by v3 in the three checkpoint docs. |
+| Current main CI | PASS | [Run #41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) on `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`: **513 passed, 6 skipped, 40 warnings, 0 failed**. |
+| Part 3 docs handoff PR #135 | PASS, OPEN | Exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) succeeded. PR is documentation-only, 10 ahead/0 behind, mergeable; not merged in this pass. |
+| Live Render verification | NOT VERIFIED | Dashboard settings, deployed commit, logs, health-check path, database attachment and runtime remain inaccessible/unverified. |
+
+
+## Cross-part final handoff — 2026-11-01
+
+| Part | Latest evidence | Result |
+|---|---|---|
+| Part 1 conflict recovery | PR #139 merged to main as `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; main CI [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) | **513 passed, 6 skipped, 40 warnings, 0 failed** |
+| Part 2 direct-publish hardening | PR #130 merged as `cbf9a2fc7ad8c5c2888916060d81752873967b4b`; CI [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) | **505 passed, 6 skipped, 40 warnings, 0 failed** |
+| Part 3 scheduler timezone/readiness | PR #132 merged as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`; exact-head CI [#41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975) | **513 passed, 6 skipped, 40 warnings, 0 failed** |
+| Part 3 documentation handoff | PR #135 synchronized, latest pre-refresh head `e781376d6283b05133291d1dfa44466d7d73f63a`; CI [#41300013654](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41300013654) | **513 passed, 6 skipped, 40 warnings, 0 failed**; final checkpoint refresh requires new exact-head CI |
+
+Render live dashboard/runtime verification remains NOT VERIFIED. No live Instagram, Meta, or Canva actions were performed; no deployment or Render configuration was changed.

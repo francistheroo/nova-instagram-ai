@@ -357,3 +357,40 @@ The user supplied this status response from the NOVA service:
 - Replacement PR #134 and its first resynchronization attempt became stale as `main` continued advancing. This documentation-only retry is based on the latest observed main snapshot `f25e908bba47ad23f297f8642b0f273b826d2ebe`.
 - No application code, live settings, deployment, or external integration changed. Ancestor CI is not evidence for this branch; exact-head CI must be checked separately.
 - Overall production readiness remains incomplete pending Parts 2 and 3.
+
+
+---
+
+## Part 3 scheduler timezone and Render readiness — updated 2026-11-01
+
+- **Code merged:** PR #132 merged to main as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`; tested PR head `34edc8714dc31782cd415c498ffcb1a518502446`.
+- `scheduler_timezone()` validates the IANA timezone at startup before schema initialization/task creation. An unset `NOVA_TIMEZONE` defaults to `Asia/Kolkata`; explicitly blank or invalid values fail closed with `invalid_timezone`. The validated ZoneInfo is passed into the scheduler loop.
+- `GET /ready` returns HTTP 503 when the scheduler is enabled but timezone/database/task startup is invalid, and 200 when scheduler operation is intentionally disabled. `/health` remains liveness/status. Readiness does not prove Meta/Canva connectivity or continuously probe PostgreSQL.
+- Regression coverage includes valid/default/invalid zones, blank/malformed values, fail-closed startup, no schema initialization on invalid timezone, scheduler-loop validation, and readiness behavior.
+- PR #132 exact latest code-head CI [#41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975): **513 passed, 6 skipped, 40 warnings, 0 failed**. Latest main `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8` CI [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332): **513 passed, 6 skipped, 40 warnings, 0 failed**.
+- Render repository review: no root `render.yaml` or `Dockerfile`; `requirements.txt` exists. Suggested commands only: `pip install -r requirements.txt` and `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Actual Render Dashboard settings, deployed commit, logs, health-check path, database attachment, and private env values remain **NOT VERIFIED**.
+- Render official HTTP checks use GET and accept 2xx/3xx within five seconds; private services use TCP; TCP is the default if no HTTP path is configured. See [Render health checks](https://render.com/docs/health-checks). Use `/ready` when scheduler readiness is required before traffic; use `/health` for liveness only.
+- Part 2 PR #130 merged as `cbf9a2fc7ad8c5c2888916060d81752873967b4b`. Part 1 PR #137 is closed unmerged; replacement branch `part1/pr131-conflict-fix-v4` has no unique commits and is 19 commits behind current main. Workflow [#41299562250](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299562250) passed **505 passed, 6 skipped, 40 warnings, 0 failed** on its branch head, but that branch contains no unique changes versus main and is not a new deliverable. No open Part 1 PR was found; the Part 1 section in the coordination hub still needs its owner to reconcile historical entries. No Part 1 branch was changed in this pass.
+- Part 3 documentation PR #135 is synchronized at `47de3ffa814239468f38c101840280c547adf2d9`; exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) passed **513 passed, 6 skipped, 40 warnings, 0 failed**. PR is mergeable and remains open pending merge decision. No Render settings, secrets, database, or deployment were changed. No live Instagram, Meta, or Canva requests were made. Keep all live switches OFF; overall readiness remains NOT COMPLETE pending Part 1 handoff and live Render evidence.
+
+
+---
+
+## Part 1 final conflict recovery and CI handoff — 2026-11-01
+
+- PR #139 merged successfully as `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`. The three documentation files now retain the v3 Part 1 recovery record and replace the stale v2 note.
+- Current main is `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; main CI [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) passed **513 passed, 6 skipped, 40 warnings, 0 failed**.
+- Part 2 PR #130 and Part 3 scheduler implementation PR #132 are merged. Part 3 documentation PR #135 remains open, documentation-only, 10 ahead/0 behind, mergeable, with successful exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932).
+- No Render settings, secrets, database, deployment, OAuth, Meta/Canva calls, Instagram messages or posts were changed or attempted. Render dashboard/runtime evidence remains **NOT VERIFIED**; end-to-end production readiness is therefore **NOT COMPLETE**.
+- Development live-action switches remain OFF.
+
+
+---
+
+## Part 3 cross-part handoff reconciliation — 2026-11-01
+
+- Part 1's latest coordination update confirms conflict-recovery PR #139 merged as current main `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; superseded PRs #131, #134 and #137 are closed unmerged. Current-main CI [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) passed **513 passed, 6 skipped, 40 warnings, 0 failed**. Part 1 reports no remaining Part 1 branch/PR work and identifies PR #135 as the only open PR.
+- Part 2 direct-publishing hardening PR #130 merged as `cbf9a2fc7ad8c5c2888916060d81752873967b4b`; its PR-head CI #41298815095 passed 505/6/40.
+- Part 3 scheduler timezone/readiness PR #132 merged as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`; exact latest code-head CI #41299392975 passed 513/6/40. `/ready` and timezone validation are in current main.
+- Part 3 documentation PR #135 is synchronized to current main and mergeable. Latest pre-checkpoint-refresh head `e781376d6283b05133291d1dfa44466d7d73f63a` passed CI #41300013654 (513 passed, 6 skipped, 40 warnings); the final checkpoint refresh requires a new exact-head CI run.
+- Render deployment/runtime remains NOT VERIFIED. No Render dashboard changes, secrets, database changes, deployments, or live Meta/Canva/Instagram actions were performed. Live switches remain OFF.
