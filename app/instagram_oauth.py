@@ -25,10 +25,10 @@ from app.oauth_store import (
     load_latest_instagram_token,
 )
 
-router = APIRouter(prefix="/oauth/instagram", tags=["Instagram OAuth"], dependencies=[Depends(require_user)])
+router = APIRouter(prefix="/oauth/instagram", tags=["Instagram OAuth"])
 STATE_COOKIE = "nova_instagram_oauth_state"
 STATE_MAX_AGE_SECONDS = 600
-DEFAULT_SCOPES = "instagram_business_basic,instagram_business_manage_messages"
+DEFAULT_SCOPES = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages"
 
 
 def _config() -> dict[str, str]:
@@ -37,7 +37,7 @@ def _config() -> dict[str, str]:
         "client_secret": os.getenv("INSTAGRAM_OAUTH_CLIENT_SECRET", "").strip(),
         "redirect_uri": os.getenv("INSTAGRAM_OAUTH_REDIRECT_URI", "").strip(),
         "scopes": os.getenv("INSTAGRAM_OAUTH_SCOPES", DEFAULT_SCOPES).strip(),
-        "api_version": os.getenv("META_API_VERSION", "v25.0").strip("/"),
+        "api_version": os.getenv("META_API_VERSION", "v26.0").strip("/"),
     }
     if not all(config[key] for key in ("client_id", "client_secret", "redirect_uri", "scopes", "api_version")):
         raise HTTPException(
@@ -49,7 +49,46 @@ def _config() -> dict[str, str]:
     return config
 
 
-@router.get("/start")
+async def _verify_instagram_profile(
+    client: httpx.AsyncClient,
+    *,
+    api_version: str,
+    access_token: str,
+    expected_user_id: str,
+) -> str | None:
+    """Verify the long-lived token resolves to the account that approved OAuth."""
+    response = await client.get(
+        f"https://graph.instagram.com/{api_version}/me",
+        params={"fields": "user_id,username"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    if response.is_error:
+        if response.status_code in (400, 401, 403):
+            raise HTTPException(
+                status_code=409,
+                detail="Instagram did not accept the new token. Check the Meta app permissions and reconnect the account.",
+            )
+        raise HTTPException(status_code=502, detail="Instagram account verification failed.")
+
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="Instagram returned an invalid account profile.")
+    profile_id = payload.get("user_id", payload.get("id"))
+    if (
+        isinstance(profile_id, bool)
+        or not isinstance(profile_id, (str, int))
+        or not str(profile_id).strip()
+        or str(profile_id).strip() != expected_user_id
+    ):
+        raise HTTPException(
+            status_code=502,
+            detail="Instagram profile verification did not match the account that authorized NOVA.",
+        )
+    username = payload.get("username")
+    return username.strip() if isinstance(username, str) and username.strip() else None
+
+
+@router.get("/start", dependencies=[Depends(require_user)])
 async def instagram_oauth_start():
     """Create and persist OAuth state, then redirect the browser to Instagram."""
     config = _config()
@@ -163,6 +202,14 @@ async def instagram_oauth_callback(
             if not isinstance(long_token, str) or not long_token.strip():
                 raise HTTPException(status_code=502, detail="Instagram did not return a long-lived access token.")
             expires_at = token_expiry_from_seconds(long_payload.get("expires_in"))
+            # Do not mark the connection successful until the long-lived token
+            # resolves to the exact Instagram account returned by the code exchange.
+            await _verify_instagram_profile(
+                client,
+                api_version=config["api_version"],
+                access_token=long_token,
+                expected_user_id=user_id,
+            )
             try:
                 save_instagram_token(user_id, long_token, expires_at=expires_at)
             except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
@@ -179,12 +226,57 @@ async def instagram_oauth_callback(
         ) from None
 
     # The redirect contains no access token or account credential.
-    response.headers["Location"] = "/?instagram_connected=pending_verification"
+    response.headers["Location"] = "/?instagram_connected=verified"
     return response
 
 
 
-@router.post("/refresh")
+@router.get("/status", dependencies=[Depends(require_user)])
+async def instagram_oauth_status():
+    """Verify the stored token against Instagram without exposing credentials."""
+    try:
+        stored = load_latest_instagram_token()
+    except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
+        raise HTTPException(status_code=503, detail="Instagram token storage is unavailable.") from None
+
+    if not stored:
+        return {"connected": False, "verified": False, "reconnect_required": False}
+    token = stored.get("access_token")
+    user_id = stored.get("instagram_user_id")
+    expires_at = stored.get("expires_at")
+    if not isinstance(token, str) or not token.strip() or not isinstance(user_id, str) or not user_id.strip():
+        raise HTTPException(status_code=503, detail="Stored Instagram credentials are incomplete. Reconnect Instagram.")
+    if expires_at is not None:
+        if not isinstance(expires_at, datetime) or expires_at.tzinfo is None:
+            raise HTTPException(status_code=503, detail="Stored Instagram token expiry is invalid. Reconnect Instagram.")
+        if expires_at <= datetime.now(timezone.utc):
+            return {"connected": False, "verified": False, "reconnect_required": True}
+
+    api_version = os.getenv("META_API_VERSION", "v26.0").strip("/")
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            username = await _verify_instagram_profile(
+                client,
+                api_version=api_version,
+                access_token=token,
+                expected_user_id=user_id,
+            )
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError, TypeError):
+        raise HTTPException(status_code=502, detail="Instagram account verification could not be completed.") from None
+
+    return {
+        "connected": True,
+        "verified": True,
+        "instagram_user_id": user_id,
+        "username": username,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+        "token_returned": False,
+    }
+
+
+@router.post("/refresh", dependencies=[Depends(require_user)])
 async def refresh_instagram_token(x_nova_api_key: str | None = Header(default=None)):
     """Refresh the stored long-lived token under a cross-worker PostgreSQL lock."""
     import hmac
