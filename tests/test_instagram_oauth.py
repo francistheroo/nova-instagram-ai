@@ -135,12 +135,19 @@ def test_oauth_callback_exchanges_code_and_keeps_tokens_server_side(monkeypatch)
             assert data["client_secret"] == "test-secret"
             return FakeResponse({"access_token": "short-token-secret", "user_id": "123456"})
 
-        async def get(self, url, *, params):
-            assert url == "https://graph.instagram.com/v25.0/access_token"
-            assert params["access_token"] == "short-token-secret"
-            return FakeResponse({"access_token": "long-token-secret", "expires_in": 3600})
+        async def get(self, url, *, params, headers=None):
+            if url == "https://graph.instagram.com/v26.0/access_token":
+                assert params["access_token"] == "short-token-secret"
+                return FakeResponse({"access_token": "long-token-secret", "expires_in": 3600})
+            assert url == "https://graph.instagram.com/v26.0/me"
+            assert params == {"fields": "user_id,username"}
+            assert headers == {"Authorization": "Bearer long-token-secret"}
+            return FakeResponse({"user_id": "123456", "username": "nova_test"})
 
     monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    # The provider redirects without NOVA's admin Basic-auth header. The signed,
+    # browser-bound, one-time OAuth state protects this callback instead.
+    app.dependency_overrides.pop(security.require_user, None)
     response = client.get(
         "/oauth/instagram/callback",
         params={"code": "fake-auth-code", "state": state},
@@ -149,7 +156,7 @@ def test_oauth_callback_exchanges_code_and_keeps_tokens_server_side(monkeypatch)
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?instagram_connected=pending_verification"
+    assert response.headers["location"] == "/?instagram_connected=verified"
     assert saved[0][0] == "123456"
     assert saved[0][1] == "long-token-secret"
     assert saved[0][2] is not None
@@ -157,6 +164,56 @@ def test_oauth_callback_exchanges_code_and_keeps_tokens_server_side(monkeypatch)
     assert "long-token-secret" not in response.text
     assert "long-token-secret" not in response.headers["location"]
     assert "max-age=0" in response.headers["set-cookie"].lower()
+
+
+def test_instagram_oauth_status_verifies_saved_real_account_without_exposing_token(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from app import instagram_oauth
+
+    monkeypatch.setenv("META_API_VERSION", "v26.0")
+    token = "private-long-lived-token"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=45)
+    monkeypatch.setattr(
+        instagram_oauth,
+        "load_latest_instagram_token",
+        lambda: {
+            "instagram_user_id": "17841400000000001",
+            "access_token": token,
+            "expires_at": expires_at,
+        },
+    )
+
+    class FakeResponse:
+        is_error = False
+        status_code = 200
+
+        def json(self):
+            return {"user_id": "17841400000000001", "username": "real_creator"}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *, params, headers):
+            assert url == "https://graph.instagram.com/v26.0/me"
+            assert params == {"fields": "user_id,username"}
+            assert headers == {"Authorization": f"Bearer {token}"}
+            return FakeResponse()
+
+    monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    response = client.get("/oauth/instagram/status")
+
+    assert response.status_code == 200
+    assert response.json()["connected"] is True
+    assert response.json()["verified"] is True
+    assert response.json()["instagram_user_id"] == "17841400000000001"
+    assert response.json()["username"] == "real_creator"
+    assert response.json()["token_returned"] is False
+    assert token not in response.text
 
 
 def test_oauth_callback_rejects_replayed_persisted_state_before_exchange(monkeypatch):
@@ -763,8 +820,11 @@ def test_instagram_callback_maps_token_storage_failure_to_safe_503(monkeypatch):
         async def post(self, *args, **kwargs):
             return FakeResponse({"access_token": "short-token-secret", "user_id": "123456"})
 
-        async def get(self, *args, **kwargs):
-            return FakeResponse({"access_token": "long-token-secret", "expires_in": 3600})
+        async def get(self, url, *, params, headers=None):
+            if url == "https://graph.instagram.com/v26.0/access_token":
+                return FakeResponse({"access_token": "long-token-secret", "expires_in": 3600})
+            assert url == "https://graph.instagram.com/v26.0/me"
+            return FakeResponse({"user_id": "123456", "username": "nova_test"})
 
     monkeypatch.setattr(instagram_oauth.httpx, "AsyncClient", lambda **kwargs: FakeClient())
     response = client.get(
