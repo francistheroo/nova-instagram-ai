@@ -31,9 +31,11 @@ from app.legal_pages import router as legal_pages_router
 from app.home_page import HOME_PAGE_HTML
 from app.auto_publisher import scheduler_loop, initialize_scheduler_schema, scheduler_timezone
 from app.security import require_user, require_master_enabled, master_enabled
+from app.session_auth import router as session_auth_router
 
 load_dotenv()
 app = FastAPI(title="NOVA Instagram AI", version="0.3.0")
+app.include_router(session_auth_router)
 app.include_router(instagram_oauth_router)
 app.include_router(ai_caption_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
 app.include_router(content_ideas_router, dependencies=[Depends(require_user), Depends(require_master_enabled)])
