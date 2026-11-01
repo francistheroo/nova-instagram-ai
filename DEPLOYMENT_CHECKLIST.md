@@ -4,6 +4,11 @@
 - [ ] Add AI provider credentials through the host's environment settings; never commit `.env`.
 - [ ] Verify `/health` and `/ready`; use `/ready` as Render's health-check path when an enabled scheduler must be ready before deployment is healthy. `/health` is a liveness/status endpoint and does not prove external integrations are connected.
 - [ ] Confirm `NOVA_TIMEZONE` is a valid IANA timezone (default `Asia/Kolkata`); invalid or blank values prevent an enabled scheduler from starting and make `/ready` return HTTP 503.
+- [ ] For a Render **web service**, configure the HTTP health-check path in Dashboard Settings as `/ready` when scheduler startup is a deployment requirement. Render sends HTTP GET requests; a response must be 2xx or 3xx within five seconds. Other status codes, timeouts, or connection failures fail the check. The path must start with `/`. See [Render health checks](https://render.com/docs/health-checks).
+- [ ] Remember that Render uses TCP checks by default when no HTTP path is configured; private services support TCP checks only. HTTP health checks apply to web services.
+- [ ] Ensure the web process binds to `0.0.0.0:$PORT`. This repository has no root `render.yaml` Blueprint or `Dockerfile`; confirm the actual Render Dashboard build/start commands and service settings rather than assuming they are configured. Typical Python commands are `pip install -r requirements.txt` and `uvicorn app.main:app --host 0.0.0.0 --port $PORT`; verify these against the deployed service.
+- [ ] Treat `/ready` as the app's scheduler-startup readiness signal, not proof of live Meta/Canva connectivity or continuous database health. `/health` remains a liveness/status endpoint and can stay 200 while the optional scheduler is not ready.
+- [ ] Confirm the new instance passes its health check before traffic is routed; Render's documented health-check success window for a new deploy is up to 15 minutes.
 
 ## Connect a real Instagram account
 
