@@ -4,10 +4,11 @@ import re
 
 import httpx
 import psycopg
-from fastapi import Header, HTTPException
+from fastapi import HTTPException
 
 from app.oauth_store import (
     OAuthStoreError,
+    InstagramRefreshInProgress,
     load_latest_instagram_token,
     instagram_refresh_lock,
 )
@@ -44,12 +45,12 @@ def _load_subscription_credentials() -> tuple[str, str]:
 
 async def update_instagram_webhook_subscription(*, subscribe: bool) -> dict:
     """Subscribe/unsubscribe only the supported messages field for the stored account."""
-    token, version = _load_subscription_credentials()
     method = "POST" if subscribe else "DELETE"
     params = {"subscribed_fields": ",".join(WEBHOOK_FIELDS)} if subscribe else {}
     try:
         # Serialize against token refresh so a token cannot rotate mid-request.
         with instagram_refresh_lock():
+            token, version = _load_subscription_credentials()
             async with httpx.AsyncClient(timeout=20.0) as client:
                 response = await client.request(
                     method,
@@ -76,15 +77,19 @@ async def update_instagram_webhook_subscription(*, subscribe: bool) -> dict:
         }
     except HTTPException:
         raise
+    except InstagramRefreshInProgress:
+        raise HTTPException(status_code=409, detail="An Instagram token refresh is already in progress. Retry shortly.") from None
+    except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
+        raise HTTPException(status_code=503, detail="Instagram refresh coordination is unavailable.") from None
     except (httpx.HTTPError, ValueError, TypeError):
         raise HTTPException(status_code=502, detail="Instagram webhook subscription request failed. Try again later.") from None
 
 
 async def get_instagram_webhook_subscription() -> dict:
     """Read account-level subscribed fields without returning credentials."""
-    token, version = _load_subscription_credentials()
     try:
         with instagram_refresh_lock():
+            token, version = _load_subscription_credentials()
             async with httpx.AsyncClient(timeout=20.0) as client:
                 response = await client.get(
                     f"https://graph.instagram.com/{version}/me/subscribed_apps",
@@ -116,5 +121,9 @@ async def get_instagram_webhook_subscription() -> dict:
         }
     except HTTPException:
         raise
+    except InstagramRefreshInProgress:
+        raise HTTPException(status_code=409, detail="An Instagram token refresh is already in progress. Retry shortly.") from None
+    except (OAuthStoreError, OAuthSecurityError, psycopg.Error):
+        raise HTTPException(status_code=503, detail="Instagram refresh coordination is unavailable.") from None
     except (httpx.HTTPError, ValueError, TypeError):
         raise HTTPException(status_code=502, detail="Instagram webhook subscription status request failed.") from None
