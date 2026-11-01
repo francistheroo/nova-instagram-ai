@@ -44,7 +44,8 @@ def test_health_distinguishes_implementation_from_live_configuration(monkeypatch
     assert payload["instagram_webhooks_implemented"] is True
     assert payload["instagram_webhook_receiver_implemented"] is True
     assert payload["instagram_webhook_verification_route_implemented"] is True
-    assert payload["instagram_webhook_subscription_automated"] is False
+    assert payload["instagram_webhook_subscription_automated"] is True
+    assert payload["instagram_webhook_subscription_routes_implemented"] is True
     assert payload["instagram_automation_enabled"] is False
     assert payload["instagram_auto_dm_replies_enabled"] is False
 
