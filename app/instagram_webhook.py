@@ -82,7 +82,11 @@ async def receive_instagram_webhook(
 
     stored = sent = skipped = uncertain = 0
     retry_requested = False
-    auto_enabled = (os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true" and master_enabled())
+    auto_enabled = (
+        os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true"
+        and os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true"
+        and master_enabled()
+    )
     try:
         entries = payload.get("entry", []) if isinstance(payload, dict) else []
         if not isinstance(entries, list):
@@ -203,7 +207,7 @@ async def receive_instagram_webhook(
                         continue
 
                     graph_base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
-                    version = os.getenv("META_API_VERSION", "v25.0").strip("/")
+                    version = os.getenv("META_API_VERSION", "v26.0").strip("/")
                     # Persist a non-reclaimable state before the request. A worker
                     # crash after Meta accepts the message must not trigger a duplicate.
                     mark_dm_event_sending(message_id)
