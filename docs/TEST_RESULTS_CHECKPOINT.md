@@ -116,3 +116,9 @@ No failing tests were found in the verified main-descendant, PR #125, or latest 
 - PR #130 branch `security/disable-canva-direct-publish-bypass` adds regressions for `/canva/instagram-posts/publish`, `/canva/instagram-reels/publish`, and `/instagram/publish-image` to ensure legacy one-step routes cannot publish or call external APIs.
 - Latest head: `c303eb5899201c3593879282b80b7f6c796d52b6`. Workflow [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) completed successfully on that exact head: job `test` **505 passed, 6 skipped, 40 warnings, 0 failed**; all workflow steps succeeded. Earlier run #41298463804 passed on the preceding head. No local tests run.
 - Earlier CI rows in this file are historical PR-head/ancestor evidence only and do not prove PR #130 or current main status.
+
+
+## Part 1 — PR #131 synchronization v3 — 2026-11-01
+
+- Reapplies the Part 1 conflict-recovery note on the latest observed main snapshot `f25e908bba47ad23f297f8642b0f273b826d2ebe`, after earlier replacement branches became stale during concurrent main updates.
+- Documentation-only; no application code or tests changed. Verify exact-head CI separately; ancestor runs do not certify this branch.
