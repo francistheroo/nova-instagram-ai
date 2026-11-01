@@ -153,3 +153,51 @@ The user supplied this status response from the NOVA service:
 - Never commit `DATABASE_URL`, Meta client secrets, OAuth state secrets, token-encryption keys, access tokens, or admin passwords.
 - Do not paste secret values into chat or checkpoint files.
 - Mocked GitHub tests and a healthy HTTP status do not prove a live Instagram connection.
+
+
+---
+
+## Part 3 audit checkpoint — 2026-11-01
+
+### Repository and CI position at audit start
+- Repository: `francistheroo/nova-instagram-ai`; work is based on `main`.
+- Latest repository commit observed before this checkpoint update: `bacf936edb06b536bff8c0a721eb2153676fd612`.
+- Canva photo review-gate edge-case PR #122 is merged as `6edf84e96b58e70a8523359fa5972363018a8cfd`.
+- PR #122 CI run `41293583471` completed successfully: **502 passed, 6 skipped, 40 warnings, 0 failed**. The three added tests cover disabled actions, rejection of non-HTTPS Canva export URLs, and refusal to publish unless Meta reports `FINISHED`.
+- This is PR-head CI evidence. A separate post-merge `main` workflow run was not verified during this audit.
+
+### Canva connection and review-before-publish audit
+- Canva OAuth/PKCE, encrypted PostgreSQL token storage, manual token refresh, design listing, export-format lookup, and asynchronous export routes are implemented in the repository.
+- `.env.example` leaves Canva client credentials empty. The code reports `canva_live_connection_verified=false`; no live Canva account connection or permission check was performed. Do not treat implementation flags as proof of connection.
+- Review workflow:
+  1. `POST /canva/instagram-draft-exports` checks that PNG/MP4 is supported and starts an export. It returns `review_required=true` and `published=false`.
+  2. `GET /canva/instagram-draft-exports/{job_id}` polls Canva and exposes temporary preview URLs only after export success. Canva export URLs expire after 24 hours.
+  3. The photo/Reel draft routes create a Meta media container but do not publish.
+  4. The photo status route reports publish readiness without publishing. The separate photo/Reel publish action must be explicitly called and the Meta container must report `FINISHED`.
+- The review routes require admin authentication; write/action routes also retain NOVA API-key, master-switch, and Instagram-automation gates as applicable. Tests use mocked Canva/Meta calls and do not establish live platform behavior.
+- **Important bypass to keep disabled in development:** `POST /canva/instagram-posts/publish` and `POST /canva/instagram-reels/publish` are separate direct-publish routes. They can publish immediately after export and do not require the per-item review workflow. Keep `INSTAGRAM_AUTOMATION_ENABLED=false` and the admin master/direct-publish settings OFF while developing. Do not use these direct routes for review-flow testing.
+
+### Scheduler and Asia/Kolkata audit
+- Safe sample defaults in `.env.example`: `NOVA_SCHEDULER_ENABLED=false`, `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_TIMEZONE=Asia/Kolkata`.
+- Admin defaults are fail-closed: `master_enabled=false`, `direct_publish_enabled=false`; default schedule slots are 09:00 photo posts and 13:00 Stories, with daily caps of 3 each.
+- The scheduler starts only when `NOVA_SCHEDULER_ENABLED=true` and a database URL is present. Actual scheduled publishing additionally requires `INSTAGRAM_AUTOMATION_ENABLED=true`, the admin master switch ON, and `direct_publish_enabled=true`.
+- The scheduler uses `ZoneInfo(NOVA_TIMEZONE)`; its default is `Asia/Kolkata`. Local slot dates are persisted, duplicate slots are blocked, and ambiguous/stale processing outcomes become `uncertain` rather than being retried.
+- Schedule slots accept strict 24-hour `HH:MM` values and duplicate valid slots are removed. Invalid/malformed slot collections disable that schedule.
+- **Audit finding — daily-cap validation mismatch:** the admin API/UI accepts caps up to 50, while the scheduler's `_daily_limit` accepts only 0–20 and silently converts values above 20 to 0 (schedule disabled). Align these limits before anyone configures caps above 20.
+- **Audit finding — timezone readiness:** an invalid `NOVA_TIMEZONE` makes `ZoneInfo` raise inside the scheduler loop; the broad loop exception handler suppresses it, so scheduling can stop without a clear health diagnostic. Validate the timezone at startup and expose a safe readiness/error flag before enabling scheduling.
+- The earlier checkpoint's `NOVA_SCHEDULER_ENABLED=true` and `INSTAGRAM_AUTOMATION_ENABLED=true` values are historical intended environment values, not verified current Render settings. For the current development phase, the safe required posture is both flags OFF, DM auto-replies OFF, and admin master/direct publishing OFF. Keep `NOVA_TIMEZONE=Asia/Kolkata`.
+
+### Render health and deployment readiness
+- The live NOVA Render endpoints `/health` and `/integrations/status` could not be fetched from this audit session, so current live service health and current deployment commit are **NOT VERIFIED** here.
+- The most recent health payload previously supplied by the user and recorded above reported service `status=ok`, but also `instagram_configured=false`, `instagram_live_connection_verified=false`, and `instagram_automatic_token_refresh_error="UndefinedTable"`.
+- The recorded `UndefinedTable` error is a deployment/database-readiness blocker for the token-refresh worker until the exact missing schema/table is identified and the existing initializer/migration is applied. Use the repository's existing `python -m app.init_oauth_db` procedure only after confirming the intended Render PostgreSQL database; do not create an ad-hoc duplicate table.
+- `/health` and `/integrations/status` expose implementation/configuration flags, not proof of valid credentials, approved permissions, or a live Canva/Meta connection.
+- No Render environment values were changed, no deployment was triggered, and no live Canva/Meta publish or messaging request was made.
+
+### Part 3 resume instructions
+1. Keep development safety flags OFF: `NOVA_SCHEDULER_ENABLED=false`, `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`; admin `master_enabled=false` and `direct_publish_enabled=false`.
+2. Preserve `NOVA_TIMEZONE=Asia/Kolkata`.
+3. Resolve the scheduler cap mismatch and timezone validation/health gap in a focused code-and-test PR before enabling scheduling.
+4. Verify the Render database schema and remove the recorded token-refresh `UndefinedTable` error; then re-fetch live `/health` and `/integrations/status` without exposing secrets.
+5. Verify Canva OAuth with a real authorized account only when explicitly approved. Keep direct-publish routes disabled; use draft → inspect → Meta `FINISHED` → explicit approval/publish.
+6. Do not deploy, enable live publishing/DM automation, change Meta settings, or publish content without explicit user authorization.
