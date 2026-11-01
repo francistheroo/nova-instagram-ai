@@ -31,24 +31,7 @@ def initialize_admin_schema():
         """)
 
 
-def require_admin(authorization: Optional[str] = Header(default=None)):
-    expected_user = os.getenv("NOVA_ADMIN_USERNAME", "")
-    expected_password = os.getenv("NOVA_ADMIN_PASSWORD", "")
-    if not expected_user or not expected_password:
-        raise HTTPException(status_code=503, detail="Set NOVA_ADMIN_USERNAME and NOVA_ADMIN_PASSWORD in Render.")
-    import base64
-    try:
-        scheme, encoded = (authorization or "").split(" ", 1)
-        username, password = base64.b64decode(encoded).decode().split(":", 1)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Admin sign-in required.", headers={"WWW-Authenticate": "Basic"}) from None
-    if scheme.lower() != "basic" or not (
-        hmac.compare_digest(username, expected_user)
-        and hmac.compare_digest(password, expected_password)
-    ):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials.", headers={"WWW-Authenticate": "Basic"})
-    return True
-
+from app.security import require_user as require_admin
 
 def read_settings():
     result = {
