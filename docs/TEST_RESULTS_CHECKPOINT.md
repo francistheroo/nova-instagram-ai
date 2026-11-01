@@ -6,6 +6,8 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 ## Latest verified results
 
+| Automatic Instagram token refresh worker | PASS + MERGED | [PR #114](https://github.com/francistheroo/nova-instagram-ai/pull/114) · [CI #41287441307](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41287441307) | Adds an opt-in background check every six hours; refreshes known, valid tokens within seven days of expiry under the existing PostgreSQL advisory lock. Worker stops on shutdown and exposes health state. Merged as `d67159d4c775b1a8bb7dc210553575329d2b3821`. Tests passed; no live Meta request was made. Enable only after Meta OAuth is connected and DATABASE_URL is configured: `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED=true`. |
+
 | Scheduled publish ambiguity protection | PASS + MERGED | [PR #111](https://github.com/francistheroo/nova-instagram-ai/pull/111) · [CI #41204551914](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41204551914) | Added an `uncertain` publish state for ambiguous Meta publish outcomes; uncertain runs reserve daily capacity and are not automatically retried. Existing schema constraint is migrated without deleting history. Tests passed; merged as `0015dd0b1d0110508dc3eebccf3584160d72a65a`. No live publishing occurred. |
 
 | Checkpoint PR #107 | PASS + MERGED | [PR #107](https://github.com/francistheroo/nova-instagram-ai/pull/107) · [CI #41203446639](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41203446639) | Records PR #106 retry-safety merge and passing CI; merged as `2d21d68640c174866081da9b2aafa0670fa1b424`. |
