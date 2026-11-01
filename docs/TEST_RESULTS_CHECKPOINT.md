@@ -144,3 +144,15 @@ Part 3 documentation PR #135 synchronized head `47de3ffa814239468f38c101840280c5
 | Current main CI | PASS | [Run #41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) on `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`: **513 passed, 6 skipped, 40 warnings, 0 failed**. |
 | Part 3 docs handoff PR #135 | PASS, OPEN | Exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) succeeded. PR is documentation-only, 10 ahead/0 behind, mergeable; not merged in this pass. |
 | Live Render verification | NOT VERIFIED | Dashboard settings, deployed commit, logs, health-check path, database attachment and runtime remain inaccessible/unverified. |
+
+
+## Cross-part final handoff — 2026-11-01
+
+| Part | Latest evidence | Result |
+|---|---|---|
+| Part 1 conflict recovery | PR #139 merged to main as `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`; main CI [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) | **513 passed, 6 skipped, 40 warnings, 0 failed** |
+| Part 2 direct-publish hardening | PR #130 merged as `cbf9a2fc7ad8c5c2888916060d81752873967b4b`; CI [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) | **505 passed, 6 skipped, 40 warnings, 0 failed** |
+| Part 3 scheduler timezone/readiness | PR #132 merged as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`; exact-head CI [#41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975) | **513 passed, 6 skipped, 40 warnings, 0 failed** |
+| Part 3 documentation handoff | PR #135 synchronized, latest pre-refresh head `e781376d6283b05133291d1dfa44466d7d73f63a`; CI [#41300013654](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41300013654) | **513 passed, 6 skipped, 40 warnings, 0 failed**; final checkpoint refresh requires new exact-head CI |
+
+Render live dashboard/runtime verification remains NOT VERIFIED. No live Instagram, Meta, or Canva actions were performed; no deployment or Render configuration was changed.
