@@ -400,24 +400,15 @@ async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_
 
 @app.post("/instagram/publish-image")
 async def publish_image(body: PublishImageRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
-    """Publish a publicly reachable image URL using Instagram's content publishing flow."""
-    if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
-        raise HTTPException(status_code=403, detail="Publishing is disabled. Set INSTAGRAM_AUTOMATION_ENABLED=true only after an authorized test.")
-    _, user_id, _ = instagram_config()
-    container = await meta_request(
-        "POST",
-        f"{user_id}/media",
-        data={"image_url": str(body.image_url), "caption": body.caption, "media_type": "IMAGE"},
+    """Reject the legacy one-step publisher; require the reviewed draft workflow."""
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "message": "Direct image publishing is disabled. Use a draft/review workflow and an explicit approved publish action.",
+            "published": False,
+            "review_required": True,
+        },
     )
-    creation_id = container.get("id")
-    if not creation_id:
-        raise HTTPException(status_code=502, detail={"message": "Instagram did not return a media container ID", "response": container})
-    published = await meta_request(
-        "POST",
-        f"{user_id}/media_publish",
-        data={"creation_id": creation_id},
-    )
-    return {"container": container, "published": published, "status": "published_if_confirmed_by_meta"}
 
 
 @app.post("/ai/generate-image")
