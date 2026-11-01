@@ -128,7 +128,7 @@ def instagram_config():
     user_id = os.getenv("INSTAGRAM_USER_ID", "").strip()
     if token and user_id:
         base = os.getenv("META_GRAPH_BASE_URL", "https://graph.instagram.com").rstrip("/")
-        version = os.getenv("META_API_VERSION", "v25.0").strip("/")
+        version = os.getenv("META_API_VERSION", "v26.0").strip("/")
         return token, user_id, f"{base}/{version}"
 
     # OAuth-connected credentials are read from encrypted PostgreSQL storage.
