@@ -29,25 +29,17 @@
 
 **Owner:** Chat / Part 1
 
-Tasks:
-- Inspect latest `main`, open PRs and recent commits.
-- Review code changes, conflicts and failing tests.
-- Fix appropriate issues without duplicating Parts 2 or 3.
-- Run relevant tests and verify GitHub CI.
-- Record PR/commit/test/CI evidence and update the recovery checkpoint.
+**Current status:** VERIFIED — conflict recovery merged, implementation PRs reviewed, and current-main CI passed. One open Part 3 documentation handoff remains.
 
-**Current status:** COMPLETE — Part 1 audit and handoffs recorded. One open Part 3 documentation PR (#128) remains under Part 3 ownership; current-main CI is not independently verified.
-
-**Latest update / handoff — 2026-11-01:**
-- Latest application/security code commit inspected at `9b8c331eb80a04a577d0fe5ed75f3d20999364ca` (`Document live-action gates in NOVA security checkpoint`); subsequent Part 1 commits on main update only coordination/recovery documentation.
-- Final open PR search found one open PR: [#128](https://github.com/francistheroo/nova-instagram-ai/pull/128), a Part 3 documentation-only Render verification follow-up. PR #127 was closed unmerged and replaced by #128. PR #128 targets main, is currently reported `mergeable=false`; compare shows its branch is 1 commit ahead and 10 behind current main. It is based on `670b1b082baa1e3e0704647f4911db7df495f1c0`, not the latest main. PRs #122–#126 and #113 are closed/merged. Part 1 did not merge or close any PR.
-- Latest verified application-code CI remains PR #126 head run [#41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475): **507 passed, 6 skipped, 40 warnings, 0 failed**. PR #126 merge commit is `d2e445be791ba36170946c2fc5d1f66bdfaad3f1`. A separate CI run on the current main head/merge commit was not returned by the available commit-run lookup; combined commit status for current main returned no status entries. Therefore current-main CI is **NOT VERIFIED**, not PASS. The earlier main run #41295206264 (503 passed, 6 skipped) is historical evidence on ancestor `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`, not the current main head.
-- PR #128 is documentation-only and GitHub currently reports `mergeable=true`; its branch is 1 ahead/5 behind current main. Its CI run #41296728250 passed **507 tests, 6 skipped, 40 warnings, 0 failed**. No open application-code PRs or failing test runs were found. Part 1 made no application-code changes.
-- Branch hygiene: `fix/validate-scheduler-settings-current-main` is 34 commits behind main with no unique commits; `security/audit-scheduler-duplicate-safety` is diverged (5 ahead, 14 behind per Part 2's later branch comparison) and modifies `app/admin.py` plus scheduler tests. Do not merge either branch without a fresh focused review/rebase. The former rebased scheduler branch is stale; duplicate test definitions observed there are not in main.
-- **Handoff to Part 2:** Please inspect `security/audit-scheduler-duplicate-safety` before reusing or deleting it. It is 5 ahead/14 behind main per Part 2's fresh comparison and contains changes to `app/admin.py`, `tests/test_scheduler_admin_limits.py`, and `tests/test_scheduler_duplicate_claim.py`; PR #126 has already merged the admin cap alignment, so avoid duplicating that fix. Part 2 has since re-reviewed the branch and confirms its cap changes/tests are already represented on main; do not reuse it. Also keep all live-action gates OFF; current repository documentation requires `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false` during development. OAuth, real permissions, and live webhook delivery remain unverified.
-- **Handoff to Part 3:** Please reconcile the Part 3 audit notes in `docs/NOVA_RECOVERY_CHECKPOINT.md` with current main. The audit records an invalid-`NOVA_TIMEZONE` startup/readiness diagnostic gap and a direct Canva publishing bypass that must remain disabled; confirm whether either has since been addressed before changing integration/deployment status. Keep Canva live connection and Render environment/health marked unverified unless directly checked.
-- Master recovery checkpoint and test-results checkpoint should continue to distinguish PR-head CI from merge-commit/main CI. See latest Part 1 record in `docs/TEST_RESULTS_CHECKPOINT.md`.
-
+**Latest handoff — 2026-11-01:**
+- Latest main: `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`. Current-main GitHub Actions run [#41299632332](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299632332) completed successfully: **513 passed, 6 skipped, 40 warnings, 0 failed**.
+- Part 1 conflict recovery PR [#139](https://github.com/francistheroo/nova-instagram-ai/pull/139) merged as `aff87fd67d6feb0d2d1b0a29c48acc41fcfbffd8`. It retains the v3 recovery note and removes the stale v2 note from the three documentation checkpoints. Superseded PRs #131, #134 and #137 remain closed unmerged.
+- Part 2 security hardening PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130) merged as `f25e908bba47ad23f297f8642b0f273b826d2ebe`. It disables legacy direct Canva photo/Reel publishing and the one-step image publisher with HTTP 410, and includes no-call regression tests. Exact-head CI [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) passed **505 passed, 6 skipped, 40 warnings, 0 failed**.
+- Part 3 scheduler timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132) merged as `09d0e771236d9f989bc4b2db9ba294f7b6918e1e`. It validates the IANA timezone before scheduler initialization and adds `/ready`. Exact-head CI [#41299392975](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299392975) passed **513 passed, 6 skipped, 40 warnings, 0 failed**.
+- The only open PR at this audit is Part 3 documentation handoff [#135](https://github.com/francistheroo/nova-instagram-ai/pull/135), branch `docs/part3-readiness-handoff`. It is documentation-only, **10 commits ahead / 0 behind** latest main, and GitHub reports `mergeable=true`. Exact-head CI [#41299803932](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41299803932) succeeded. No review submissions or unresolved inline review threads were returned. It remains open; no merge was performed in this Part 1 pass.
+- No application code was changed by Part 1. No local test suite was run in this pass; CI is the recorded test evidence. No deployment, OAuth, live Meta/Canva request, Instagram message or post was attempted.
+- **Outstanding blocker:** Render dashboard/runtime evidence remains unavailable. Actual deployed commit, service settings, health-check path, logs, database attachment and private environment values remain **NOT VERIFIED**. This prevents declaring end-to-end production readiness complete.
+- **Live safety posture:** keep `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false` during development. Do not test by sending messages or publishing posts.
 ### Part 2 — Instagram security and automation
 
 **Owner:** Chat / Part 2
