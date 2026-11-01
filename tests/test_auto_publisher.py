@@ -201,3 +201,32 @@ def test_daily_limit_rejects_booleans_negative_values_and_unbounded_caps():
     assert publisher._daily_limit(21, 3) == 0
     assert publisher._daily_limit("3", 3) == 0
 
+
+
+@pytest.mark.parametrize("timezone_name", ["", "Not/A_Real_Zone", "Asia/Kolkata/Invalid"])
+def test_scheduler_timezone_rejects_invalid_names(timezone_name):
+    with pytest.raises(ValueError, match="invalid_timezone"):
+        publisher.scheduler_timezone(timezone_name)
+
+
+def test_scheduler_timezone_defaults_to_asia_kolkata_when_unset(monkeypatch):
+    monkeypatch.delenv("NOVA_TIMEZONE", raising=False)
+
+    assert str(publisher.scheduler_timezone()) == "Asia/Kolkata"
+
+
+def test_scheduler_timezone_uses_valid_configured_iana_zone(monkeypatch):
+    monkeypatch.setenv("NOVA_TIMEZONE", "Asia/Kolkata")
+
+    assert str(publisher.scheduler_timezone()) == "Asia/Kolkata"
+
+
+def test_scheduler_loop_validates_timezone_before_entering_poll_loop(monkeypatch):
+    import asyncio
+
+    monkeypatch.setenv("NOVA_TIMEZONE", "Invalid/Timezone")
+    stop_event = asyncio.Event()
+    stop_event.set()
+
+    with pytest.raises(ValueError, match="invalid_timezone"):
+        asyncio.run(publisher.scheduler_loop(None, None, stop_event))
