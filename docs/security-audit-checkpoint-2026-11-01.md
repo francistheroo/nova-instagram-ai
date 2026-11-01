@@ -17,6 +17,7 @@ Base: `main`
 - `require_user` accepts only `NOVA_ADMIN_USERNAME` and `NOVA_ADMIN_PASSWORD`; there is no ordinary-user credential path in this shared dependency.
 - Sensitive API operations additionally require `NOVA_API_KEY` where implemented.
 - The NOVA master switch is read from PostgreSQL and fails closed when the database is missing or unavailable.
+- Live comment replies, DM sends, image publishing, Reel publishing, and direct Canva photo/Reel publishing require the admin login, NOVA API key, master switch, and `INSTAGRAM_AUTOMATION_ENABLED=true`; Reel draft creation is also gated and remains unpublished until the explicit publish endpoint is called after Meta reports `FINISHED`.
 - Public health/integration status routes expose configuration booleans and implementation status only; they do not return secrets or prove account authorization.
 
 ## DM conversation memory
