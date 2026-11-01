@@ -27,8 +27,9 @@ def test_login_status_and_logout_revoke_browser_session(monkeypatch):
     monkeypatch.setattr(sessions, "_connect", lambda: fake)
 
     original_hash = sessions._token_hash
+    original_execute = fake.execute
     def execute_and_track(query, params=None):
-        result = fake.execute(query, params)
+        result = original_execute(query, params)
         if query.startswith("INSERT INTO nova_web_sessions"):
             active.add(params[0])
         elif query.startswith("DELETE FROM nova_web_sessions WHERE token_hash"):
