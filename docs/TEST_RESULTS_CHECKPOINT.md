@@ -6,6 +6,9 @@ This file tracks verified repository/CI checks separately from live Instagram in
 
 ## Latest verified results
 
+| Stale scheduler processing reconciliation | PASS + MERGED | [PR #119](https://github.com/francistheroo/nova-instagram-ai/pull/119) · [CI #41288262861](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41288262861) | Rows left in `processing` for over two hours become `uncertain`, retain daily-cap capacity, and are never automatically retried. Tests cover the transition and threshold validation. Merged as `47ba003436e2c9cc36736d2778883225cebcba15`. No live publishing occurred. |
+
+
 | Instagram account webhook subscription controls | PASS + MERGED | [PR #117](https://github.com/francistheroo/nova-instagram-ai/pull/117) · [CI #41287980131](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41287980131) | Protected subscribe/status/unsubscribe routes use the Instagram Login `/me/subscribed_apps` edge and only the supported `messages` field. Reuses the PostgreSQL refresh lock; tokens are not returned. CI passed on the implementation commit; final follow-up change was README wording only. App-level callback/field setup and live delivery remain Meta Dashboard tasks. Merge SHA `ae815a1ed66a947b01dd8701031dc7565f962d34`. |
 
 | Automatic Instagram token refresh worker | PASS + MERGED | [PR #114](https://github.com/francistheroo/nova-instagram-ai/pull/114) · [CI #41287441307](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41287441307) | Adds an opt-in background check every six hours; refreshes known, valid tokens within seven days of expiry under the existing PostgreSQL advisory lock. Worker stops on shutdown and exposes health state. Merged as `d67159d4c775b1a8bb7dc210553575329d2b3821`. Tests passed; no live Meta request was made. Enable only after Meta OAuth is connected and DATABASE_URL is configured: `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED=true`. |
@@ -51,7 +54,7 @@ PRs #83, #85, and #94 were closed because their security changes are already rep
 ## Not yet verified
 
 - Webhook duplicate/idempotency review: existing tests cover duplicate message IDs, retryable AI/Meta failures, post-send history failure, and ambiguous send timeout; further concurrent-delivery/database integration testing remains pending.
-- Scheduler reliability: existing tests cover daily-cap reservation and midnight local-date handling. Processing rows older than two hours are now changed to `uncertain`, retain their daily-cap reservation, and are never automatically retried because Meta may already have accepted the publish before a worker crash. Manual reconciliation is still needed to decide the final outcome. Downtime longer than the one-minute catch-up window can miss a slot; decide whether missed slots should be skipped or backfilled.
+- Scheduler reliability: existing tests cover daily-cap reservation and midnight local-date handling. Processing rows older than two hours are changed to `uncertain`, retain their daily-cap reservation, and are never automatically retried because Meta may already have accepted the publish before a worker crash. Manual reconciliation is still needed to decide the final outcome. Downtime longer than the one-minute catch-up window can miss a slot; decide whether missed slots should be skipped or backfilled.
 - Ambiguous outbound DM delivery remains a manual-reconciliation case: send timeouts and Meta HTTP 5xx responses are marked uncertain and are not automatically resent. No automated reconciliation UI/workflow is implemented.
 - Scheduler daily limits and timezone boundary cases beyond the already merged midnight-slot fix.
 - Live Meta OAuth authorization and token exchange.
