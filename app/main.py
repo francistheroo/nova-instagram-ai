@@ -26,7 +26,7 @@ from app.canva_direct_post import router as canva_direct_post_router
 from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
-from app.auto_publisher import scheduler_loop, initialize_scheduler_schema
+from app.auto_publisher import scheduler_loop, initialize_scheduler_schema, scheduler_timezone
 from app.security import require_user, require_master_enabled, master_enabled
 
 load_dotenv()
@@ -83,17 +83,30 @@ async def start_auto_publisher():
     # The durable scheduler is opt-in and never starts from an API request.
     if os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() != "true":
         return
+    try:
+        # Validate once during startup so an invalid IANA zone cannot fail
+        # silently inside the scheduler's recurring exception handler.
+        scheduler_zone = scheduler_timezone()
+        app.state.nova_scheduler_timezone_valid = True
+    except ValueError:
+        app.state.nova_scheduler_timezone_valid = False
+        app.state.nova_scheduler_error = "invalid_timezone"
+        return
     if not os.getenv("DATABASE_URL", "").strip():
         # Do not report a task as running when it cannot read durable settings.
         app.state.nova_scheduler_error = "database_not_configured"
         return
-    from app.auto_publisher import initialize_scheduler_schema
     try:
         initialize_scheduler_schema()
         app.state.nova_scheduler_error = None
         app.state.nova_scheduler_stop = asyncio.Event()
         app.state.nova_scheduler_task = asyncio.create_task(
-            scheduler_loop(meta_request, instagram_config, app.state.nova_scheduler_stop)
+            scheduler_loop(
+                meta_request,
+                instagram_config,
+                app.state.nova_scheduler_stop,
+                scheduler_zone,
+            )
         )
     except Exception:
         # Keep the API available; /health reports scheduler readiness separately.
@@ -222,8 +235,36 @@ async def root():
     }
 
 
+@app.get("/ready")
+async def readiness():
+    """Deployment readiness; unlike /health, fails when an enabled scheduler cannot run."""
+    scheduler_enabled = os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true"
+    scheduler_task = getattr(app.state, "nova_scheduler_task", None)
+    scheduler_error = getattr(app.state, "nova_scheduler_error", None)
+    scheduler_running = scheduler_task is not None and not scheduler_task.done()
+    scheduler_ready = not scheduler_enabled or (
+        scheduler_error is None and scheduler_running
+    )
+    if not scheduler_ready:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not_ready",
+                "auto_scheduler_error": scheduler_error or "scheduler_not_running",
+            },
+        )
+    return {
+        "status": "ready",
+        "auto_scheduler_enabled": scheduler_enabled,
+        "auto_scheduler_ready": scheduler_ready,
+    }
+
+
 @app.get("/health")
 async def health():
+    scheduler_enabled = os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true"
+    scheduler_task = getattr(app.state, "nova_scheduler_task", None)
+    scheduler_running = scheduler_task is not None and not scheduler_task.done()
     return {
         "status": "ok",
         "service": "NOVA Instagram AI",
@@ -247,12 +288,13 @@ async def health():
         "instagram_webhook_subscription_automated": True,
         "instagram_webhook_subscription_routes_implemented": True,
         "instagram_automation_enabled": os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() == "true",
-        "auto_scheduler_enabled": os.getenv("NOVA_SCHEDULER_ENABLED", "false").lower() == "true",
-        "ai_master_enabled": master_enabled(),
-        "auto_scheduler_running": (
-            hasattr(app.state, "nova_scheduler_task")
-            and not app.state.nova_scheduler_task.done()
+        "auto_scheduler_enabled": scheduler_enabled,
+        "auto_scheduler_timezone_valid": getattr(app.state, "nova_scheduler_timezone_valid", None),
+        "auto_scheduler_ready": not scheduler_enabled or (
+            getattr(app.state, "nova_scheduler_error", None) is None and scheduler_running
         ),
+        "ai_master_enabled": master_enabled(),
+        "auto_scheduler_running": scheduler_running,
         "auto_scheduler_error": getattr(app.state, "nova_scheduler_error", None),
         "instagram_auto_dm_replies_enabled": os.getenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "false").lower() == "true",
         "ai_configured": bool(configured_provider_names()),
