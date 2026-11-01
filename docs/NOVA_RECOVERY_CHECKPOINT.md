@@ -312,3 +312,27 @@ The user supplied this status response from the NOVA service:
 - A fresh comparison against current main (`d154ca50db4dcd6f60207ad038625f08abbacb0e`) now reports PR #128 as **1 commit ahead / 10 commits behind**, diverged, with GitHub `mergeable=false`. This supersedes the earlier mergeable=true / 1-ahead-5-behind observation.
 - PR #128 head remains `afa1d2e5b5b5fca36524eb2008528a65da9186c6`, based on `670b1b082baa1e3e0704647f4911db7df495f1c0`. Part 3 should rebase/update against current main, preserve all Part 1/Part 2 checkpoint and coordination additions, and rerun CI before merging.
 - PR #128's existing successful run #41296728250 is on its current PR head and records **507 passed, 6 skipped, 40 warnings, 0 failed**; it does not verify a rebased head or current main.
+
+
+## Render verification follow-up — 2026-11-01
+
+- Attempted to retrieve the deployed public endpoints `https://nova-instagram-ai.onrender.com/health` and `https://nova-instagram-ai.onrender.com/integrations/status`. Both requests were inaccessible from the audit environment, so live Render status, deployed commit, and runtime configuration remain **UNVERIFIED**. This is not evidence that the service is down.
+- Re-checked current source: `app/admin.py` validates both daily caps with `Field(ge=0, le=20)`; `app/auto_publisher.py` accepts integer caps from 0 through 20. The previously recorded daily-cap mismatch (admin accepts 50 vs scheduler 0–20) is **incorrect and superseded**; the current limits are aligned at 20.
+- The timezone issue remains: `app/main.py:start_auto_publisher` starts the scheduler task without validating `NOVA_TIMEZONE`; `app/auto_publisher.py:scheduler_loop` constructs `ZoneInfo` inside its recurring loop. Invalid timezone configuration can therefore leave the scheduler task failing after startup without a clear startup readiness diagnostic. A focused code/test change is still needed.
+- The historical token-refresh `UndefinedTable` report is not confirmed against the current deployed database. Do not run schema initialization or alter Render's database until its actual `DATABASE_URL` target and backup state are confirmed by the owner in the Render dashboard.
+- No Render dashboard credentials or private environment values were available. No secrets were requested or exposed, no Render environment values were changed, no deploy was triggered, and publishing/DM automation remains in development-safe OFF posture.
+- Next required live verification: inspect the Render service's latest deploy event and logs; confirm deployed commit, health-check path, runtime/build/start commands, and attached PostgreSQL database; then re-fetch both endpoints. Resolve any database error only after identifying the exact missing table and confirming the intended database.
+
+
+---
+
+## PR #128 CI and Render follow-up — 2026-11-01
+
+- PR #128: https://github.com/francistheroo/nova-instagram-ai/pull/128
+- Verified PR head at the time of CI run: `afa1d2e5b5b5fca36524eb2008528a65da9186c6`.
+- GitHub Actions workflow run #355 (run ID `41296833074`) completed with conclusion `success`. Its `test` job and all reported steps, including dependency installation and test execution, completed successfully.
+- PR #128 was still open and reported mergeable at verification time. No merge was performed.
+- Re-attempted the public Render endpoints `/health` and `/integrations/status`; both remained inaccessible from the available web/runtime tools. The connected-browser session was unavailable, and no Render dashboard connector/session or dashboard credentials were available.
+- Therefore the current Render deployment, deploy commit, service health, runtime logs, health-check configuration, attached database, and private environment settings remain **UNVERIFIED**. Endpoint retrieval failure is not proof that the service is down.
+- No Render settings, secrets, database schema, or deployment were changed. No Instagram messaging or publishing was performed. Keep live actions disabled during development.
+- To complete live verification, the owner must provide non-sensitive screenshots or copied text from the Render service's latest deploy event and logs, service settings (build/start/health-check configuration), and database attachment overview. Redact all environment values, connection strings, tokens, and credentials. Once those details are available, compare the deployed commit/configuration with the repository and retry the public endpoints.
