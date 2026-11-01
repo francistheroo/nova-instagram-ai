@@ -93,3 +93,18 @@ This checkpoint records repository tests only. It does not authorize deployment,
 | Checkpoint refresh | PASS | This entry records both PR-head and current-main verification. |
 
 No live Canva/Meta publishing was performed; external calls in the regression tests are mocked. CI warnings are deprecation notices and did not fail the run. Live Instagram integration and production readiness remain outside this task and are still unverified.
+
+
+## Part 1 audit — main, pull requests, and CI — 2026-11-01
+
+| Check | Status | Evidence |
+|---|---|---|
+| Current main inspection | PASS | Audited main at `2270b2cecaa0ce89431652bfa2d4f114dab5dfa7`. The commit after the last verified application-code commit changes only this checkpoint document; the latest application-code CI evidence remains run #41295206264 on ancestor `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`. |
+| Open PR inventory | PASS | One open PR found: [PR #125](https://github.com/francistheroo/nova-instagram-ai/pull/125), documentation-only, targeting main, mergeable, no reported conflicts. PR #123 and #124 are already merged; PR #122 and #113 are also merged. No PR was merged or closed as part of this audit. |
+| PR #125 review | PASS | Reviewed the full diff in `docs/NOVA_RECOVERY_CHECKPOINT.md`. It adds environment/deployment inventory and clearly marks live Render values/health as unverified. No secrets or application-code changes are included. |
+| PR #125 CI | PASS | [Run #41296198515](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296198515), head `6ca05547022d3b5bf945aff7542d3c74b098ade1`: job `test` completed successfully; log confirms **503 passed, 6 skipped, 40 warnings, 0 failed**. Dependency installation and all workflow steps completed. |
+| Latest main application-code CI | PASS | [Run #41295206264](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41295206264) on `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`: **503 passed, 6 skipped, 40 warnings, 0 failed**. Compared with PR #123 and #124 merge commits, this run's commit is a descendant of both. |
+| PR #123 / #124 CI | PASS | PR #123 runs #41294344287 and #41294373094 completed successfully; PR #124 head run #41294349800 completed successfully. These changes are already merged. |
+| Scheduler validation branch hygiene | REVIEW NOTE | The unassociated branch `fix/validate-scheduler-settings-rebased` is 2 commits ahead of main and its `tests/test_auto_publisher.py` contains duplicate definitions of the same three test functions. No workflow run was returned for its head and no matching open PR was found. The duplicate definitions are not present on main; main already contains the scheduler validation implementation/tests from merged PR #113. This stale branch was not merged or modified. The older `fix/validate-scheduler-settings` branch is diverged (3 ahead, 40 behind) and is not suitable for merging as-is. |
+
+No failing tests were found in the verified main-descendant or PR #125 CI runs. The 40 warnings are non-fatal deprecation warnings. PR #125 remains open; this audit does not merge it. No deployment, live Instagram message, or publishing action was performed. Live Render configuration, live Canva/Meta authorization, and production behavior remain unverified.
