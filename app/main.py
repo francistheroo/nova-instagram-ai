@@ -26,6 +26,7 @@ from app.canva_direct_post import router as canva_direct_post_router
 from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import initialize_schema as initialize_oauth_schema, load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
+from app.legal_pages import router as legal_pages_router
 from app.auto_publisher import scheduler_loop, initialize_scheduler_schema, scheduler_timezone
 from app.security import require_user, require_master_enabled, master_enabled
 
@@ -44,6 +45,7 @@ app.include_router(canva_direct_publish_router)
 app.include_router(canva_direct_post_router)
 app.include_router(instagram_reels_router)
 app.include_router(admin_router)
+app.include_router(legal_pages_router)
 
 
 @app.on_event("startup")
