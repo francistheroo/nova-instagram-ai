@@ -130,7 +130,7 @@ document.getElementById('ideasForm').addEventListener('submit', event => {
     count:Number(document.getElementById('ideasCount').value),
     format:document.getElementById('ideasFormat').value,
     language:document.getElementById('ideasLanguage').value
-  }), data => data.ideas.map((idea, i) => (i+1)+'. '+idea.title+' ('+idea.format+')\nHook: '+idea.hook+'\nIdea: '+idea.concept+(idea.call_to_action?'\nCTA: '+idea.call_to_action:'')).join('\n\n'));
+  }), data => data.ideas.map((idea, i) => (i+1)+'. '+idea.title+' ('+idea.format+')\\nHook: '+idea.hook+'\\nIdea: '+idea.concept+(idea.call_to_action?'\\nCTA: '+idea.call_to_action:'')).join('\\n\\n'));
 });
 
 document.getElementById('imageForm').addEventListener('submit', async event => {
