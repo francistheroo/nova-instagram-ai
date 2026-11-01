@@ -46,28 +46,15 @@
 
 **Owner:** Chat / Part 2
 
-Tasks:
-- Audit all live-action gates and authorization.
-- Disable direct Canva publishing paths that bypass the reviewed draft flow.
-- Add regression tests proving direct publish routes cannot call Canva or Meta.
-- Keep all live messaging and publishing disabled during development.
+**Current status:** COMPLETE — security-gate hardening merged and exact-head CI passed. Live Meta/OAuth behavior remains unverified; live actions remain disabled.
 
-**Current status:** CODE AND PR CI VERIFIED — focused hardening PR #130 is open for review. Direct Canva photo/Reel routes and the legacy one-step image publisher are disabled in the branch; do not mark the full three-part cycle complete yet.
-
-**Latest update / handoff — 2026-11-01:**
-- Re-read the coordination hub on current main and audited current main commit `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`. PR #128 has since merged as that commit; the old coordination text elsewhere in this hub still contains stale PR #128 open/conflict statements. Part 1's documentation PR [#131](https://github.com/francistheroo/nova-instagram-ai/pull/131) is now closed unmerged; stale backup PR [#129](https://github.com/francistheroo/nova-instagram-ai/pull/129) is also closed unmerged. Part 1's audit evidence exists in the PR/checkpoint, but its coordination section remains stale. Please update your hub section and review PR #130.
-- **Direct Canva bypass found:** `app/canva_direct_post.py` and `app/canva_direct_publish.py` previously called Canva export and Meta `media_publish` directly after general flag, NOVA API key, admin and DB master checks; they did not enforce the separate review/draft flow. This allowed a direct Canva publish without review.
-- **Additional direct image bypass found:** `app/main.py:/instagram/publish-image` also created and published a media container in one request after authorization/feature gates, without an explicit draft/review step.
-- **Hardening in PR #130:** branch `security/disable-canva-direct-publish-bypass`, PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130). The two legacy Canva routes now return HTTP 410 with `review_required=true` and `published=false`; their external Canva/Meta publishing logic has been removed. The generic one-step `/instagram/publish-image` route also returns HTTP 410. All retain API-key, admin and master-switch dependencies before returning the disabled response. No external calls can be made through these legacy routes.
-- **Regression coverage:** updated `tests/test_canva_direct_post.py` and `tests/test_canva_direct_publish.py` to assert permanent HTTP 410 even when `INSTAGRAM_AUTOMATION_ENABLED=true`, while keeping admin/master authorization tests. Added `tests/test_live_action_review_gates.py` to prove the generic one-step image route rejects publication and never calls Meta.
-- **Other live-action routes reviewed:** comment replies, DM replies, generic Reel publish, Canva photo publish and Canva Reel draft/publish actions require admin authentication, NOVA API key, DB master switch and global automation flag (where the route sends/publishes). Reel/photo publish routes also check Meta container `FINISHED` before `media_publish`. Webhook auto-replies retain their DM-specific flag + global automation flag + master switch. Scheduler has its independent scheduler flag, global flag, DB master and `direct_publish_enabled` gate.
-- **Review-flow limitation:** publish endpoints in the draft flow are explicit authenticated admin actions after draft/status inspection, but the code does not maintain a separate durable per-item approval ledger. Treat the explicit publish request as the operator's approval; a formal approval record/audit trail is a future hardening item if stronger workflow proof is required.
-- **PR/CI:** PR #130 is open and currently reports mergeable. Latest head `c303eb5899201c3593879282b80b7f6c796d52b6`. Latest GitHub Actions run [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) completed successfully: job `test` passed, **505 passed, 6 skipped, 40 warnings, 0 failed**. All workflow steps completed. Earlier run #41298463804 also passed on the preceding head. No local test execution was available in this pass.
-- **Files changed on branch (6):** `app/canva_direct_post.py`, `app/canva_direct_publish.py`, `app/main.py`, `tests/test_canva_direct_post.py`, `tests/test_canva_direct_publish.py`, `tests/test_live_action_review_gates.py`. Compare to current main shows 8 commits ahead / 3 behind due to later documentation commits; GitHub reports PR #130 mergeable.
-- **Development posture:** do not enable `INSTAGRAM_AUTOMATION_ENABLED`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED`, `NOVA_SCHEDULER_ENABLED`, or any direct-publish setting during development. No real Instagram messages/posts, Canva API calls, OAuth, Render changes or deployment were performed.
-- **Part 1 handoff:** PR #128 is now merged in main at `c18af6a32870ad40ceb6735b5c8a368bd7861c9f`; update stale coordination status and inspect open PR [#129](https://github.com/francistheroo/nova-instagram-ai/pull/129), a backup of PR #113 with scheduler code changes, reported open and non-mergeable. Determine whether it is needed or should be closed; do not merge it blindly.
-- **Part 3 handoff:** Part 3 has opened timezone/readiness PR [#132](https://github.com/francistheroo/nova-instagram-ai/pull/132), branch `fix/scheduler-timezone-readiness`, latest inspected head `fc587f4c1b58cc38d58e9dff58894e7e6943a3bc`; it is open and currently reports non-mergeable. Both PR #130 and PR #132 modify `app/main.py` in different areas (direct image route vs scheduler startup/readiness), so coordinate merge order and re-check/rebase the remaining branch after the first merges. Latest workflow lookup returned no CI run for the inspected PR #132 head. Please complete test/CI review and Render evidence separately. Canva/Render live connections remain unverified.
-- Overall production-readiness work is **NOT COMPLETE** until Parts 1 and 3 post current-cycle evidence and PR #130 receives Part 1 review/merge decision.
+**Final handoff — 2026-11-01:**
+- Security hardening PR [#130](https://github.com/francistheroo/nova-instagram-ai/pull/130) is merged. The legacy direct Canva photo/Reel publishing routes and the one-step `/instagram/publish-image` route are disabled with HTTP 410 responses; publishing calls were removed from those bypass routes.
+- Regression tests cover the disabled routes and assert no Meta/Canva publishing call occurs through them. PR-head CI [#41298815095](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41298815095) completed successfully: **505 passed, 6 skipped, 40 warnings, 0 failed**.
+- The reviewed draft flow still uses an explicit authenticated admin publish action after the draft/status review. There is no separate durable per-item approval ledger; treat that as a documented future auditability improvement, not as an unverified claim of a formal approval record.
+- Remaining external verification: real Meta OAuth permissions, account connectivity, webhook delivery, and Render runtime are not verified in this repository-only pass.
+- No real Instagram messages/posts, Meta/Canva requests, OAuth flow, Render settings, secrets or deployments were changed or attempted.
+- Keep `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false` during development. Do not enable live publishing as part of this closeout.
 ### Part 3 — Scheduler and deployment readiness
 
 **Owner:** Chat / Part 3
@@ -94,9 +81,6 @@ Tasks:
 
 ### 2026-11-01 — Part 1 — PR #131 conflict recovery v4
 
-- **Status:** IN PROGRESS — PR #137 became non-mergeable after `main` advanced. This replacement branch is created directly from the current `main` ref to preserve all other chats' latest documentation.
+- **Status:** SUPERSEDED — no unique changes remain; replacement PR #139 merged.
 - **Branch:** `part1/pr131-conflict-fix-v4`.
-- **Base:** `main` at branch creation; exact base SHA is recorded in the pull request metadata.
-- **Changes:** Replaces the stale v2 recovery note with the v3 note in the three Part 1 checkpoint/coordination documents. No application code, tests, live settings, deployment, or external integration changed.
-- **CI:** Not yet verified for this exact branch head. Ancestor CI must not be reported as current branch CI.
-- **Next:** Verify exact-head CI and mergeability; Part 2 and Part 3 evidence remains independently required before overall readiness can be complete.
+- **Disposition:** This temporary branch was superseded by the conflict-free PR #139. Do not reopen or merge this branch.
