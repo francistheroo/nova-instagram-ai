@@ -637,3 +637,31 @@ def test_webhook_rejects_oversized_payload_before_signature_check(monkeypatch):
 
     assert response.status_code == 413
     assert response.json()["detail"] == "Webhook payload exceeds the 1 MiB limit."
+
+
+
+def test_webhook_global_automation_switch_blocks_auto_replies(monkeypatch):
+    monkeypatch.setenv("INSTAGRAM_AUTO_DM_REPLIES_ENABLED", "true")
+    monkeypatch.setenv("INSTAGRAM_AUTOMATION_ENABLED", "false")
+    monkeypatch.setattr(webhook, "master_enabled", lambda: True)
+    monkeypatch.setattr(
+        webhook,
+        "claim_dm_event",
+        lambda *_args, **_kwargs: pytest.fail("Global automation OFF must not claim a DM send"),
+    )
+    monkeypatch.setattr(webhook, "store_dm_message", lambda *_args, **_kwargs: "stored")
+    monkeypatch.setattr(
+        webhook,
+        "generate_dm_reply",
+        lambda *_args, **_kwargs: pytest.fail("Global automation OFF must not generate a sendable reply"),
+    )
+
+    response = _post_signed_payload(
+        monkeypatch,
+        _timestamp_payload(1_900_000_000_000, "global-automation-off-mid"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["stored_text_messages"] == 1
+    assert response.json()["automatic_replies_sent"] == 0
+    assert response.json()["automatic_replies_skipped"] == 1
