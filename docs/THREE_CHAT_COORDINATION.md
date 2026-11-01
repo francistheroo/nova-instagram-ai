@@ -36,13 +36,13 @@ Tasks:
 - Run relevant tests and verify GitHub CI.
 - Record PR/commit/test/CI evidence and update the recovery checkpoint.
 
-**Current status:** COMPLETE — Part 1 audit and handoffs recorded. One open Part 3 documentation PR (#127) remains under Part 3 ownership; current-main CI is not independently verified.
+**Current status:** COMPLETE — Part 1 audit and handoffs recorded. One open Part 3 documentation PR (#128) remains under Part 3 ownership; current-main CI is not independently verified.
 
 **Latest update / handoff — 2026-11-01:**
 - Latest `main` inspected at `9b8c331eb80a04a577d0fe5ed75f3d20999364ca` (commit: `Document live-action gates in NOVA security checkpoint`). Latest commit changes only `docs/security-audit-checkpoint-2026-11-01.md`.
-- Final open PR search found one open PR: [#127](https://github.com/francistheroo/nova-instagram-ai/pull/127), a Part 3 documentation-only Render verification follow-up. It targets main, is currently reported `mergeable=false`, and its branch base predates Part 1's latest main checkpoint commit. PRs #122–#126 and #113 are closed/merged. Part 1 did not merge or close any PR.
+- Final open PR search found one open PR: [#128](https://github.com/francistheroo/nova-instagram-ai/pull/128), a Part 3 documentation-only Render verification follow-up. PR #127 was closed unmerged and replaced by #128. PR #128 targets main, is currently reported `mergeable=true`, but its branch is 1 commit ahead and 5 behind current main; it is based on `670b1b082baa1e3e0704647f4911db7df495f1c0`, not the latest main. PRs #122–#126 and #113 are closed/merged. Part 1 did not merge or close any PR.
 - Latest verified application-code CI remains PR #126 head run [#41296358475](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296358475): **507 passed, 6 skipped, 40 warnings, 0 failed**. PR #126 merge commit is `d2e445be791ba36170946c2fc5d1f66bdfaad3f1`. A separate CI run on the current main head/merge commit was not returned by the available commit-run lookup; combined commit status for current main returned no status entries. Therefore current-main CI is **NOT VERIFIED**, not PASS. The earlier main run #41295206264 (503 passed, 6 skipped) is historical evidence on ancestor `48bbe70670dcbeaf2fd22ec2afa6e723d3bdb7f2`, not the current main head.
-- PR #127 is documentation-only; GitHub currently reports `mergeable=false`. Its latest PR-head CI was not verified in this Part 1 pass. No open application-code PRs or failing test runs were found. Part 1 made no application-code changes.
+- PR #128 is documentation-only and GitHub currently reports `mergeable=true`; its branch is 1 ahead/5 behind current main. Its CI run #41296728250 passed **507 tests, 6 skipped, 40 warnings, 0 failed**. No open application-code PRs or failing test runs were found. Part 1 made no application-code changes.
 - Branch hygiene: `fix/validate-scheduler-settings-current-main` is 34 commits behind main with no unique commits; `security/audit-scheduler-duplicate-safety` is diverged (5 ahead, 12 behind) and modifies `app/admin.py` plus scheduler tests. Do not merge either branch without a fresh focused review/rebase. The former rebased scheduler branch is stale; duplicate test definitions observed there are not in main.
 - **Handoff to Part 2:** Please inspect `security/audit-scheduler-duplicate-safety` before reusing or deleting it. It is 5 ahead/12 behind main and contains changes to `app/admin.py`, `tests/test_scheduler_admin_limits.py`, and `tests/test_scheduler_duplicate_claim.py`; PR #126 has already merged the admin cap alignment, so avoid duplicating that fix. Also keep all live-action gates OFF; current repository documentation requires `INSTAGRAM_AUTOMATION_ENABLED=false`, `INSTAGRAM_AUTO_DM_REPLIES_ENABLED=false`, and `NOVA_SCHEDULER_ENABLED=false` during development. OAuth, real permissions, and live webhook delivery remain unverified.
 - **Handoff to Part 3:** Please reconcile the Part 3 audit notes in `docs/NOVA_RECOVERY_CHECKPOINT.md` with current main. The audit records an invalid-`NOVA_TIMEZONE` startup/readiness diagnostic gap and a direct Canva publishing bypass that must remain disabled; confirm whether either has since been addressed before changing integration/deployment status. Keep Canva live connection and Render environment/health marked unverified unless directly checked.
@@ -96,6 +96,17 @@ Tasks:
 ## Shared handoff log
 
 Add new entries at the top. Use this format:
+
+### 2026-11-01 — Part 1 — PR #128 follow-up handoff
+
+- **Status:** VERIFIED — documentation diff reviewed; PR-head CI passed. Current-main CI remains NOT VERIFIED.
+- **Branch / PR:** `docs/render-verification-followup`, [PR #128](https://github.com/francistheroo/nova-instagram-ai/pull/128), open, documentation-only, GitHub `mergeable=true`.
+- **Commit SHA:** PR head `afa1d2e5b5b5fca36524eb2008528a65da9186c6`; base `670b1b082baa1e3e0704647f4911db7df495f1c0`; current main at audit read `6437f7d04286f745feba90c42cf73819dcba4b19`.
+- **Changes made:** No PR changes by Part 1. Reviewed PR #128's one-file diff in `docs/NOVA_RECOVERY_CHECKPOINT.md`; it accurately marks Render endpoints/runtime unverified, corrects the obsolete daily-cap mismatch (both limits 0–20), and retains the timezone readiness follow-up. PR #127 is closed unmerged.
+- **Tests run and results:** PR #128 CI [run #41296728250](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41296728250): **507 passed, 6 skipped, 40 warnings, 0 failed**.
+- **CI evidence:** PR-head CI only; current main combined status had no entries and no current-main workflow run was returned.
+- **Risks or blockers:** PR #128 is 1 commit ahead/5 behind current main despite GitHub reporting mergeable; its base predates the latest Part 1 checkpoint edits in the same recovery file.
+- **Next part / requested action:** Part 3: rebase/update PR #128 against current main or verify the merge preserves the latest Part 1 section before merging. Address timezone startup validation in a separate code/test PR. Part 2: update its section in this hub when its security audit is complete.
 
 ### 2026-11-01 — Part 2 — current-main security and automation re-audit
 
