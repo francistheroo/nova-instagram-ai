@@ -49,8 +49,9 @@ The first three settings keep publishing, automatic DMs, and scheduled publishin
 
 - Tests use mocked providers; no live Instagram messages or content are sent by this change.
 - Production Render environment values cannot be verified from repository source. Confirm the three live-action flags are false in deployment settings before any development deployment.
-- Draft PR: [#123](https://github.com/francistheroo/nova-instagram-ai/pull/123).
+- Pull request [#123](https://github.com/francistheroo/nova-instagram-ai/pull/123) was merged into `main` (merge commit `49073cbf0c258821570a8107011dfde18fd4ff7b`).
 - GitHub Actions run #327 (run ID `41294344287`): **success**. PostgreSQL service initialization, dependency installation, and the full `python -m pytest -q` test step completed successfully.
 - Follow-up GitHub Actions run #329 (run ID `41294373094`): **success**. The `test` job and all steps, including `python -m pytest -q`, completed successfully on the updated checkpoint commit.
-- No CI failures remain on the PR branch. No live Instagram message or publishing action was performed.
-- PR #123 remains open as a draft for human review. Production Render environment values and real Creator-account permission grants remain external verification items; this repository-only audit cannot certify them.
+- Final PR-branch GitHub Actions run #331 (run ID `41294968288`): **success**. The `test` job completed successfully; PostgreSQL initialization, checkout, Python setup, dependency installation, and the full test step all passed.
+- PR #123 is merged into `main`; the merged code and regression test were independently confirmed on `main`. No live Instagram message or publishing action was performed.
+- Production Render environment values and real Creator-account permission grants remain external verification items; this repository-only audit cannot certify them.
