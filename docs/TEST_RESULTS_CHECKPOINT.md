@@ -170,3 +170,17 @@ Render live dashboard/runtime verification remains NOT VERIFIED. No live Instagr
 | Open pull requests | 0 | GitHub open-PR search returned no results. |
 | Render live dashboard/runtime | NOT VERIFIED | Requires authorized Render account access; no live settings, secrets or deployment were changed. |
 | Live Instagram/Meta/Canva actions | NOT ATTEMPTED | All live automation/publishing switches remain OFF. |
+
+
+## Token-refresh schema startup fix — 2026-11-01
+
+| Check | Status | Evidence |
+|---|---|---|
+| Runtime error diagnosis | PASS (code-path diagnosis) | The refresh worker's first storage read calls `load_latest_instagram_token()`, which queries `nova_instagram_tokens`; the existing OAuth schema initializer creates that table. |
+| Startup schema fix | PASS + MERGED | [PR #141](https://github.com/francistheroo/nova-instagram-ai/pull/141), merge commit `5d5435bcad27f5118d74a95ff2582df06b9c9f92`; initialize the existing idempotent OAuth schema before starting the refresh worker, and fail closed if initialization fails. |
+| Exact PR-head CI | PASS | [Run #41302005766](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41302005766): **515 passed, 6 skipped, 40 warnings, 0 failed**; install and test steps succeeded. |
+| Post-merge main CI | NOT YET VERIFIED | PR-head CI is not a substitute for a workflow on the merge commit. |
+| Render redeploy and runtime verification | NOT YET VERIFIED | Must confirm deployment of the merge commit and re-check health/logs. |
+| Live Instagram OAuth/connection | NOT VERIFIED | The user-provided status showed Instagram unconfigured and no live connection. |
+
+No live Instagram messages/posts, OAuth, Meta/Canva requests, Render changes, or database operations were performed.
