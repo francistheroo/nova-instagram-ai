@@ -26,7 +26,7 @@ from app.canva_direct_post import router as canva_direct_post_router
 from app.instagram_reels import router as instagram_reels_router
 from app.oauth_store import load_instagram_token, load_latest_instagram_token, OAuthStoreError
 from app.admin import router as admin_router
-from app.auto_publisher import scheduler_loop, initialize_scheduler_schema, scheduler_timezone
+from app.auto_publisher import scheduler_loop, scheduler_timezone
 from app.security import require_user, require_master_enabled, master_enabled
 
 load_dotenv()
@@ -96,6 +96,7 @@ async def start_auto_publisher():
         # Do not report a task as running when it cannot read durable settings.
         app.state.nova_scheduler_error = "database_not_configured"
         return
+    from app.auto_publisher import initialize_scheduler_schema
     try:
         initialize_scheduler_schema()
         app.state.nova_scheduler_error = None
