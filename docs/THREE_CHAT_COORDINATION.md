@@ -84,3 +84,11 @@
 - **Status:** SUPERSEDED — no unique changes remain; replacement PR #139 merged.
 - **Branch:** `part1/pr131-conflict-fix-v4`.
 - **Disposition:** This temporary branch was superseded by the conflict-free PR #139. Do not reopen or merge this branch.
+
+### 2026-11-01 — Part 3 runtime token-refresh schema follow-up
+
+- **Diagnosis:** The deployed status response reported `UndefinedTable` while the automatic Instagram token-refresh worker was running. The worker calls `load_latest_instagram_token()`, which queries `nova_instagram_tokens`. That table is created by the existing idempotent `app.oauth_store.initialize_schema()` / `python -m app.init_oauth_db` deployment initialization; the token-refresh startup path previously did not ensure the OAuth schema existed before launching the worker.
+- **Fix merged:** PR [#141](https://github.com/francistheroo/nova-instagram-ai/pull/141) merged as `5d5435bcad27f5118d74a95ff2582df06b9c9f92`. The startup now initializes the existing OAuth schema before creating the worker. If initialization fails, the worker stays stopped and status reports only `schema_initialization_failed`.
+- **CI:** Exact PR-head workflow [#41302005766](https://github.com/francistheroo/nova-instagram-ai/actions/runs/41302005766) passed: **515 passed, 6 skipped, 40 warnings, 0 failed**. This is PR-head CI; post-merge main CI and Render redeployment are not yet verified.
+- **Safety:** No Render settings, secrets, database contents, Instagram credentials, OAuth, messages, or publishing were changed or used. The schema initializer is idempotent and creates only the existing OAuth state/token tables.
+- **Remaining external verification:** Confirm Render deploys the merged main commit, then re-check `/health` and logs to ensure the token-refresh error is absent. Do not claim live Instagram connectivity; the user-reported response still showed Instagram unconfigured and unverified. Keep auto-replies and direct publishing disabled.
