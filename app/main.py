@@ -154,7 +154,7 @@ class PublishImageRequest(BaseModel):
 
 class MessageReplyRequest(BaseModel):
     recipient_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:-]+$")
-    message: str = Field(min_length=1, max_length=1000)
+    message: str = Field(min_length=1, max_length=10000)
 
 
 class ImageGenerationRequest(BaseModel):
@@ -431,20 +431,43 @@ async def reply_to_comment(comment_id: str, body: CommentReplyRequest, _: bool =
     return await meta_request("POST", f"{comment_id}/replies", data={"message": body.message})
 
 
+def _split_instagram_dm(text: str, max_chars: int = 950) -> list[str]:
+    """Split long replies into complete, readable DM messages without dropping text."""
+    remaining = text.strip()
+    parts: list[str] = []
+    while remaining:
+        if len(remaining) <= max_chars:
+            parts.append(remaining)
+            break
+        split_at = remaining.rfind(" ", 0, max_chars + 1)
+        newline_at = remaining.rfind("\\n", 0, max_chars + 1)
+        split_at = max(split_at, newline_at)
+        if split_at <= 0:
+            split_at = max_chars
+        parts.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].strip()
+    return [part for part in parts if part]
+
+
 @app.post("/instagram/messages/reply")
 async def reply_to_message(body: MessageReplyRequest, _: bool = Depends(require_nova_key), __: bool = Depends(require_user), ___: bool = Depends(require_master_enabled)):
-    """Send a reply to an eligible Instagram-scoped recipient ID after Meta messaging authorization."""
+    """Send long replies as consecutive Instagram DMs instead of truncating them."""
     if os.getenv("INSTAGRAM_AUTOMATION_ENABLED", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Instagram actions are disabled. Enable only after testing and authorization.")
     _, user_id, _ = instagram_config()
-    return await meta_request(
-        "POST",
-        f"{user_id}/messages",
-        data={
-            "recipient": __import__("json").dumps({"id": body.recipient_id}),
-            "message": __import__("json").dumps({"text": body.message}),
-        },
-    )
+    chunks = _split_instagram_dm(body.message)
+    results = []
+    for chunk in chunks:
+        result = await meta_request(
+            "POST",
+            f"{user_id}/messages",
+            data={
+                "recipient": __import__("json").dumps({"id": body.recipient_id}),
+                "message": __import__("json").dumps({"text": chunk}),
+            },
+        )
+        results.append(result)
+    return {"sent": len(results), "messages": results}
 
 
 @app.post("/instagram/publish-image")
