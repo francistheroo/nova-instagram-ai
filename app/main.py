@@ -440,7 +440,7 @@ def _split_instagram_dm(text: str, max_chars: int = 950) -> list[str]:
             parts.append(remaining)
             break
         split_at = remaining.rfind(" ", 0, max_chars + 1)
-        newline_at = remaining.rfind("\\n", 0, max_chars + 1)
+        newline_at = remaining.rfind("\n", 0, max_chars + 1)
         split_at = max(split_at, newline_at)
         if split_at <= 0:
             split_at = max_chars
