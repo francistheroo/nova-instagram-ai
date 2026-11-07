@@ -356,6 +356,44 @@ async def integrations_status():
     }
 
 
+def _nova_identity_reply(message: str) -> Optional[str]:
+    """Return NOVA's fixed identity in the user's language for direct identity questions."""
+    normalized = " ".join(message.casefold().split())
+
+    malayalam_identity_phrases = (
+        "നിന്റെ പേര്", "നിങ്ങളുടെ പേര്", "നിങ്ങളുടെ പേരെന്ത്", "നീ ആരാണ്",
+        "നിങ്ങൾ ആരാണ്", "നിങ്ങളാരാണ്", "ആരാണ് നീ", "പേര് എന്താണ്",
+    )
+    if any(phrase in normalized for phrase in malayalam_identity_phrases):
+        return "ഞാൻ NOVA ആണ് — നിങ്ങളുടെ സൗഹൃദപരമായ AI സഹായി. 😊"
+
+    manglish_identity_phrases = (
+        "ninte peru", "ningalude peru", "peru entha", "entha peru",
+        "nee aara", "ningal aara", "nee aaranu", "ningal aaranu",
+        "ninne entha vilikkam", "ninne entha vilikkanam",
+        "ninte name", "ningalude name",
+    )
+    if any(phrase in normalized for phrase in manglish_identity_phrases):
+        return "Njan NOVA aanu — ninte friendly AI assistant. 😊"
+
+    english_identity_patterns = (
+        r"\\bwhat(?:'s| is) your name\\b",
+        r"\\bwho are you\\b",
+        r"\\bwho r u\\b",
+        r"\\bwhat should i call you\\b",
+        r"\\bwhat can i call you\\b",
+        r"\\bwhat do i call you\\b",
+        r"\\bare you nova\\b",
+        r"\\bare you an? ai\\b",
+        r"\\bwhat are you\\b",
+        r"\\bintroduce yourself\\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in english_identity_patterns):
+        return "I'm NOVA, your friendly AI assistant. 😊"
+
+    return None
+
+
 @app.post("/preview-reply")
 async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __: bool = Depends(require_master_enabled)):
     """Generate a reply preview. This endpoint does not send anything to Instagram."""
@@ -371,6 +409,13 @@ async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __:
         }
 
     user_message = body.message
+    identity_reply = _nova_identity_reply(user_message)
+    if identity_reply:
+        return {
+            "reply": identity_reply,
+            "mode": "identity",
+            "sent_to_instagram": False,
+        }
     if body.language_hint:
         user_message += f"\\n\\nLanguage preference hint: {body.language_hint}"
     try:
