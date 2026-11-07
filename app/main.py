@@ -377,16 +377,16 @@ def _nova_identity_reply(message: str) -> Optional[str]:
         return "Njan NOVA aanu — ninte friendly AI assistant. 😊"
 
     english_identity_patterns = (
-        r"\\bwhat(?:'s| is) your name\\b",
-        r"\\bwho are you\\b",
-        r"\\bwho r u\\b",
-        r"\\bwhat should i call you\\b",
-        r"\\bwhat can i call you\\b",
-        r"\\bwhat do i call you\\b",
-        r"\\bare you nova\\b",
-        r"\\bare you an? ai\\b",
-        r"\\bwhat are you\\b",
-        r"\\bintroduce yourself\\b",
+        r"\bwhat(?:'s| is) your name\b",
+        r"\bwho are you\b",
+        r"\bwho r u\b",
+        r"\bwhat should i call you\b",
+        r"\bwhat can i call you\b",
+        r"\bwhat do i call you\b",
+        r"\bare you nova\b",
+        r"\bare you an? ai\b",
+        r"\bwhat are you\b",
+        r"\bintroduce yourself\b",
     )
     if any(re.search(pattern, normalized) for pattern in english_identity_patterns):
         return "I'm NOVA, your friendly AI assistant. 😊"
