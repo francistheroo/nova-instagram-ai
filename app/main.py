@@ -397,6 +397,15 @@ def _nova_identity_reply(message: str) -> Optional[str]:
 @app.post("/preview-reply")
 async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __: bool = Depends(require_master_enabled)):
     """Generate a reply preview. This endpoint does not send anything to Instagram."""
+    user_message = body.message
+    identity_reply = _nova_identity_reply(user_message)
+    if identity_reply:
+        return {
+            "reply": identity_reply,
+            "mode": "identity",
+            "sent_to_instagram": False,
+        }
+
     if not configured_provider_names():
         return {
             "reply": (
@@ -405,15 +414,6 @@ async def preview_reply(body: ReplyRequest, _: bool = Depends(require_user), __:
                 "generate cheyyum. This is only a preview; nothing was sent."
             ),
             "mode": "fallback",
-            "sent_to_instagram": False,
-        }
-
-    user_message = body.message
-    identity_reply = _nova_identity_reply(user_message)
-    if identity_reply:
-        return {
-            "reply": identity_reply,
-            "mode": "identity",
             "sent_to_instagram": False,
         }
     if body.language_hint:
